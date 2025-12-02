@@ -1,0 +1,71 @@
+# .clang-format for AV2-OBU-Tool
+# Based on Google style with some customizations
+
+BasedOnStyle: Google
+Language: Cpp
+Standard: c++17
+
+# Indentation
+IndentWidth: 2
+TabWidth: 2
+UseTab: Never
+AccessModifierOffset: -2
+ConstructorInitializerIndentWidth: 2
+ContinuationIndentWidth: 2
+
+# Line breaks
+ColumnLimit: 100
+AlwaysBreakAfterReturnType: None
+AlwaysBreakTemplateDeclarations: Yes
+BreakBeforeBraces: Attach
+BreakConstructorInitializers: BeforeColon
+
+# Spacing
+SpaceAfterCStyleCast: false
+SpaceAfterTemplateKeyword: true
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeParens: ControlStatements
+SpaceInEmptyParentheses: false
+SpacesInAngles: false
+SpacesInContainerLiterals: false
+SpacesInCStyleCastParentheses: false
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+
+# Alignment
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AlignEscapedNewlines: Left
+AlignOperands: true
+AlignTrailingComments: true
+
+# Includes
+IncludeBlocks: Regroup
+IncludeCategories:
+  # Project headers (obu_tool/*)
+  - Regex:           '^<obu_tool/'
+    Priority:        1
+  # Third-party headers (CLI11, spdlog, nlohmann/json, etc.)
+  - Regex:           '^<(CLI|spdlog|nlohmann)/'
+    Priority:        2
+  # Google Test
+  - Regex:           '^<gtest/'
+    Priority:        3
+  # C++ standard library
+  - Regex:           '^<[a-z_]+>'
+    Priority:        4
+  # Everything else
+  - Regex:           '.*'
+    Priority:        5
+
+# Pointers and references
+DerivePointerAlignment: false
+PointerAlignment: Left
+
+# Other
+AllowShortBlocksOnASingleLine: Empty
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+BinPackArguments: true
+BinPackParameters: true

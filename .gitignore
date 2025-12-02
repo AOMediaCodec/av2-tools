@@ -1,41 +1,60 @@
-# Prerequisites
-*.d
+# OS cruft
+.DS_Store
+Thumbs.db
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
+# Editors / IDEs
+.vscode/
+.idea/
+*.code-workspace
 
-# Precompiled Headers
-*.gch
-*.pch
+# CMake build trees (anywhere)
+**/build/
+**/mybuild/
+**/cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+Makefile
+Testing/
+*.ninja
+.ninja_*
 
-# Linker files
-*.ilk
-
-# Debugger Files
-*.pdb
-
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
+# Binaries / libs
 *.exe
 *.out
 *.app
+*.dll
+*.dylib
+*.so
+*.a
+*.lib
+*.la
+*.lai
 
-# debug information files
-*.dwo
+# Objects / deps
+*.o
+*.obj
+*.lo
+*.slo
+*.d
+*.gch
+*.pch
+*.mod
+*.smod
+
+# Logs / misc
+*.log
+
+# Binary data files
+*.bin
+*.av1
+*.av2
+*.obu
+*.ivf
+
+# Coverage & profiling 
+*.gcda
+*.gcno
+*.profraw
+*.profdata
