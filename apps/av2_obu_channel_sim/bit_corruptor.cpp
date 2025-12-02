@@ -19,7 +19,7 @@
 namespace av2_obu {
 
 BitCorruptor::BitCorruptor(double ber, const Options& opts)
-    : ChannelSimulator(opts), ber_(ber), rng_(options_.seed) {
+  : ChannelSimulator(opts), ber_(ber), rng_(options_.seed) {
   if (ber_ < 0.0 || ber_ > 1.0) {
     spdlog::error("BER must be between 0.0 and 1.0");
     ber_ = 0.0;
@@ -40,7 +40,8 @@ bool BitCorruptor::corrupt(const std::string& input, const std::string& output) 
     return false;
   }
 
-  std::vector<uint8_t> data((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+  std::vector<uint8_t> data((std::istreambuf_iterator<char>(ifs)),
+                            std::istreambuf_iterator<char>());
   ifs.close();
 
   total_bytes_ = data.size();
@@ -70,7 +71,8 @@ bool BitCorruptor::corrupt(const std::string& input, const std::string& output) 
 
   bytes_affected_ = affected_bytes.size();
 
-  spdlog::info("Corruption complete: {} bits flipped in {} bytes", bits_corrupted_, bytes_affected_);
+  spdlog::info("Corruption complete: {} bits flipped in {} bytes", bits_corrupted_,
+               bytes_affected_);
 
   // Write output file
   std::ofstream ofs(output, std::ios::binary);
@@ -79,8 +81,7 @@ bool BitCorruptor::corrupt(const std::string& input, const std::string& output) 
     return false;
   }
 
-  ofs.write(reinterpret_cast<const char*>(data.data()),
-            static_cast<std::streamsize>(data.size()));
+  ofs.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));
   ofs.close();
 
   spdlog::info("Output written to: {}", output);

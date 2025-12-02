@@ -18,7 +18,7 @@
 namespace av2_obu {
 
 PacketLossSimulator::PacketLossSimulator(size_t packet_size, double plr, const Options& opts)
-    : ChannelSimulator(opts), packet_size_(packet_size), plr_(plr), rng_(options_.seed) {
+  : ChannelSimulator(opts), packet_size_(packet_size), plr_(plr), rng_(options_.seed) {
   if (plr_ < 0.0 || plr_ > 1.0) {
     spdlog::error("PLR must be between 0.0 and 1.0");
     plr_ = 0.0;
@@ -44,7 +44,8 @@ bool PacketLossSimulator::simulate(const std::string& input, const std::string& 
     return false;
   }
 
-  std::vector<uint8_t> data((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+  std::vector<uint8_t> data((std::istreambuf_iterator<char>(ifs)),
+                            std::istreambuf_iterator<char>());
   ifs.close();
 
   total_bytes_ = data.size();

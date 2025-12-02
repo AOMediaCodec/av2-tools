@@ -54,7 +54,7 @@ int main(int argc, char** argv) {
   corrupt_cmd->add_option("input", corrupt_input, "Input AV2 bitstream")->required();
   corrupt_cmd->add_option("-o,--output", corrupt_output, "Output corrupted bitstream")->required();
   corrupt_cmd->add_option("--ber", ber, "Bit error rate (0.0-1.0, e.g., 0.001 = 0.1%)")
-      ->check(CLI::Range(0.0, 1.0));
+    ->check(CLI::Range(0.0, 1.0));
   corrupt_cmd->add_flag("--no-protect-config", no_protect,
                         "Disable protection of config OBUs (default: protected)");
   corrupt_cmd->add_option("--seed", corrupt_seed, "Random seed for reproducibility (0 = random)");
@@ -71,11 +71,11 @@ int main(int argc, char** argv) {
 
   packetloss_cmd->add_option("input", packet_input, "Input AV2 bitstream")->required();
   packetloss_cmd->add_option("-o,--output", packet_output, "Output bitstream with packet loss")
-      ->required();
+    ->required();
   packetloss_cmd->add_option("--packet-size", packet_size, "Packet size in bytes (default: 1200)")
-      ->check(CLI::Range(1, 65536));
+    ->check(CLI::Range(1, 65536));
   packetloss_cmd->add_option("--plr", plr, "Packet loss rate (0.0-1.0, e.g., 0.05 = 5%)")
-      ->check(CLI::Range(0.0, 1.0));
+    ->check(CLI::Range(0.0, 1.0));
   packetloss_cmd->add_flag("--no-protect-config", no_protect_packets,
                            "Disable protection of config OBUs (default: protected)");
   packetloss_cmd->add_option("--seed", packet_seed, "Random seed for reproducibility (0 = random)");
