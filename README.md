@@ -1,50 +1,21 @@
 # AV2 Tools
 
-Toolkit for parsing, analyzing, manipulating, and packaging AV2 bitstreams.
+Tools for parsing, analyzing, manipulating, and packaging AV2 bitstreams.
 
-## Quick Start
-
-```bash
-# Build (parallel compilation with -j)
-cmake -S . -B mybuild && cmake --build mybuild -j
-
-# Parse and dump OBUs
-./mybuild/apps/av2_obu_tool/av2_obu_tool dump <file.bin>
-
-# Export to JSON
-./mybuild/apps/av2_obu_tool/av2_obu_tool -j dump <file.bin> -o output.json
-
-# Show statistics
-./mybuild/apps/av2_obu_tool/av2_obu_tool stats <file.bin>
-```
-
-## Build Options
-
-Configure with CMake options to enable additional features:
+## How to Build
 
 ```bash
-# Enable examples
-cmake -S . -B mybuild -DBUILD_EXAMPLES=ON
-
-# Enable packager (will fetch MPEG's libisomedia)
-cmake -S . -B mybuild -DBUILD_PACKAGER=ON
-
-# Disable tests
-cmake -S . -B mybuild -DBUILD_TESTS=OFF
-
-# Combine options
-cmake -S . -B mybuild -DBUILD_EXAMPLES=ON -DBUILD_PACKAGER=ON
-
-# Then build
-cmake --build mybuild -j
+mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Debug -DBUILD_PACKAGER=ON -DBUILD_EXAMPLES=ON
+make -j
 ```
 
 ## Applications
 
-- **av2_obu_tool** - Parse, dump, and analyze AV2 bitstreams (JSON export, statistics)
-- **av2_obu_switcher** - Bitstream switching experiments
-- **av2_obu_packager** - Package AV2 into MP4 containers (requires `-DBUILD_PACKAGER=ON`)
-- **av2_obu_channel_sim** - Simulate packet loss and network conditions
+- [**av2_obu_tool**](./apps/av2_obu_tool/) - Parse, dump, and analyze AV2 bitstreams (JSON export, statistics)
+- [**av2_obu_switcher**](./apps/av2_obu_switcher/) - Bitstream switching experiments
+- [**av2_obu_packager**](./apps/av2_obu_packager/) - Package AV2 into MP4 containers (requires `-DBUILD_PACKAGER=ON`)
+- [**av2_obu_channel_sim**](./apps/av2_obu_channel_sim/) - Simulate packet loss and network conditions
 
 ## Library
 
@@ -68,7 +39,12 @@ if (parser.parse_file("bitstream.bin")) {
 
 - CMake 3.16+
 - C++17 compiler
-- Dependencies auto-fetched: CLI11, spdlog, nlohmann/json, libisomedia, Google Test
+- Dependencies (auto-fetched): 
+  - [CLI11](https://github.com/CLIUtils/CLI11)
+  - [spdlog](https://github.com/gabime/spdlog.git)
+  - [nlohmann/json](https://github.com/nlohmann/json.git)
+  - [libisomedia](https://github.com/MPEGGroup/isobmff.git)
+  - Google Test
 
 ## License
 
