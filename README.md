@@ -10,30 +10,18 @@ cmake .. -DCMAKE_BUILD_TYPE=Debug -DBUILD_PACKAGER=ON -DBUILD_EXAMPLES=ON
 make -j
 ```
 
+## Library
+
+The project builds `libav2_obu.a`, a reusable C++ library for parsing AV2 OBU bitstreams.
+
 ## Applications
+
+The project builds several applications that use the `libav2_obu.a`:
 
 - [**av2_obu_tool**](./apps/av2_obu_tool/) - Parse, dump, and analyze AV2 bitstreams (JSON export, statistics)
 - [**av2_obu_switcher**](./apps/av2_obu_switcher/) - Bitstream switching experiments
 - [**av2_obu_packager**](./apps/av2_obu_packager/) - Package AV2 into MP4 containers (requires `-DBUILD_PACKAGER=ON`)
 - [**av2_obu_channel_sim**](./apps/av2_obu_channel_sim/) - Simulate packet loss and network conditions
-
-## Library
-
-The project builds `libav2_obu.a`, a reusable C++ library for parsing AV2 OBU bitstreams.
-
-### Usage Example
-
-```cpp
-#include <av2_obu/av2_obu.h>
-
-using namespace av2_obu;
-
-OBUParser parser;
-if (parser.parse_file("bitstream.bin")) {
-    auto json = parser.to_json();
-    std::cout << json.dump(2);
-}
-```
 
 ## Requirements
 
