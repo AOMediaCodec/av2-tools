@@ -30,13 +30,17 @@ public:
 
   explicit BitstreamSwitcher(double fps);
 
-  // Load N streams; all streams share the same FPS.
-  // `names` are paths; returns false if any init fails.
+  /// @brief Load N streams; all streams share the same FPS.
+  /// @param names are paths; returns false if any init fails.
+  /// @return true on success.
   bool attach_streams(const std::vector<std::string>& names);
 
-  // Produce output by stitching A->B->C... using switch points.
-  // Streams are used in order of `stream_order` (same size as switch_points + 1).
-  // Assumes stream alignment as you specified.
+  /// @brief Produce output by stitching A->B->C... using switch points.
+  /// @param stream_order specifies which stream to use at each segment ( = switch_points + 1).
+  /// @param switch_points specify when to switch and on which OBU type.
+  /// @param output_path is the output file path.
+  /// @note Assumes stream alignment
+  /// @return true on success.
   bool stitch(const std::vector<size_t>& stream_order,
               const std::vector<SwitchPoint>& switch_points, const std::string& output_path);
 
@@ -46,11 +50,19 @@ private:
     std::unique_ptr<OBUParser> parser;
   };
 
-  // Find the OBU index nearest to timestamp on the specified type.
-  // Prefers the earliest frame >= target; if none, takes the nearest before.
+  /// @brief Find the OBU index nearest to timestamp on the specified type.
+  /// @param s stream to search
+  /// @param timestamp_sec target time in seconds
+  /// @param type target OBU type to match
+  /// @return index of the matching OBU
   size_t find_switch_index(const Stream& s, double timestamp_sec, OBUType type) const;
 
-  // Copy byte ranges [from_index_begin, from_index_end) from `from` into `ofs`.
+  /// @brief Copy byte ranges [from_index_begin, from_index_end) from `from` into `ofs`.
+  /// @param from source stream
+  /// @param from_index_begin starting OBU index (inclusive)
+  /// @param from_index_end ending OBU index (exclusive)
+  /// @param ofs output file stream
+  /// @return true on success.
   bool copy_range(const Stream& from, size_t from_index_begin, size_t from_index_end,
                   std::ofstream& ofs) const;
 
