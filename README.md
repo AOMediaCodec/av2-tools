@@ -1,6 +1,6 @@
 # AV2 Tools
 
-Tools for parsing, analyzing, manipulating, and packaging AV2 bitstreams.
+Tools developed within the AOMedia Storage and Transport Formats (STF) Working Group for parsing, analyzing, manipulating, and packaging AV2 bitstreams.
 
 ## How to Build
 
