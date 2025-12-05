@@ -36,7 +36,7 @@ bool MetadataGroupOBU::parse_payload(std::ifstream& ifs) {
     spdlog::debug("  metadata_application_id: {}", int(metadata_application_id_));
 
     uint32_t metadata_unit_cnt_minus_1 = br.read_leb128();
-    metadata_unit_cnt_ = metadata_unit_cnt_minus_1; // TODO: don't forget to add 1
+    metadata_unit_cnt_ = metadata_unit_cnt_minus_1 + 1;
 
     spdlog::debug("  metadata_unit_cnt: {}", metadata_unit_cnt_);
 
