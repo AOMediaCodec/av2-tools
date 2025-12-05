@@ -75,16 +75,16 @@ bool MetadataGroupOBU::parse_payload(std::ifstream& ifs) {
 
 json MetadataGroupOBU::to_json() const {
   json j = BaseOBU::to_json();
-  j["payload"] = {{"metadata_is_suffix", metadata_is_suffix_},
-                  {"metadata_necessity_idc", metadata_necessity_idc_},
-                  {"metadata_application_id", metadata_application_id_},
-                  {"metadata_unit_cnt", metadata_unit_cnt_}};
+  j["metadata_is_suffix"] = metadata_is_suffix_;
+  j["metadata_necessity_idc"] = metadata_necessity_idc_;
+  j["metadata_application_id"] = metadata_application_id_;
+  j["metadata_unit_cnt"] = metadata_unit_cnt_;
 
   json units_array = json::array();
   for (const auto& unit : units_) {
     units_array.push_back(unit.to_json());
   }
-  j["payload"]["units"] = units_array;
+  j["units"] = units_array;
 
   return j;
 }

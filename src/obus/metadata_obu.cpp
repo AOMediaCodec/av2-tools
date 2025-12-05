@@ -53,11 +53,8 @@ bool MetadataOBU::parse_payload(std::ifstream& ifs) {
 
 json MetadataOBU::to_json() const {
   json j = BaseOBU::to_json();
-  j["payload"] = {{"metadata_is_suffix", metadata_is_suffix_}};
-
-  // Add metadata unit
-  j["payload"]["metadata_unit"] = metadata_unit_.to_json();
-
+  j["metadata_is_suffix"] = metadata_is_suffix_;
+  j["metadata_unit"] = metadata_unit_.to_json();
   return j;
 }
 
