@@ -56,8 +56,7 @@ target_sources(av2_obu
     src/obus/regular_tile_group_obu.cpp
     src/obus/tile_group_obu.cpp
     src/obus/metadata_obu.cpp
-    src/obus/metadata_obu_impl.cpp
-    src/obus/metadata_obu_wrapper.cpp
+    src/obus/metadata_group_obu.cpp
     src/obus/metadata_unit.cpp
     src/obus/switch_obu.cpp
     src/obus/leading_sef_obu.cpp
@@ -97,8 +96,7 @@ target_sources(av2_obu
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/av2_obu/obus/regular_tile_group_obu.h>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/av2_obu/obus/tile_group_obu.h>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/av2_obu/obus/metadata_obu.h>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/av2_obu/obus/metadata_obu_impl.h>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/av2_obu/obus/metadata_obu_wrapper.h>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/av2_obu/obus/metadata_group_obu.h>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/av2_obu/obus/metadata_unit.h>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/av2_obu/obus/switch_obu.h>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/av2_obu/obus/leading_sef_obu.h>

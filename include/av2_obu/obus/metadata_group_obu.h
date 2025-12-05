@@ -13,10 +13,11 @@
 
 #include <av2_obu/core/av2_types.h>
 #include <av2_obu/core/base_obu.h>
+#include <av2_obu/obus/metadata_unit.h>
 
 namespace av2_obu {
 
-// Metadata Group OBU - Contains metadata information (OBU type 6)
+// Metadata Group OBU that contains multiple metadata units
 class MetadataGroupOBU : public BaseOBU {
 public:
   explicit MetadataGroupOBU(const OBUPosition& pos) : BaseOBU(pos) {}
@@ -24,15 +25,22 @@ public:
   json to_json() const override;
   std::string type_name() const override { return "OBU_METADATA_GROUP"; }
 
-  // Get metadata type
-  MetadataType get_metadata_type() const { return metadata_type_; }
+  // Accessors
+  uint8_t get_is_suffix() const { return metadata_is_suffix_; }
+  uint8_t get_necessity_idc() const { return metadata_necessity_idc_; }
+  uint8_t get_application_id() const { return metadata_application_id_; }
+  uint32_t get_unit_count() const { return metadata_unit_cnt_; }
+  const std::vector<MetadataUnit>& get_units() const { return units_; }
 
 protected:
   bool parse_payload(std::ifstream& ifs) override;
 
 private:
-  MetadataType metadata_type_ = MetadataType::RESERVED;
-  // Metadata-specific payload (can be further subclassed)
+  uint8_t metadata_is_suffix_ = 0;
+  uint8_t metadata_necessity_idc_ = 0;
+  uint8_t metadata_application_id_ = 0;
+  uint32_t metadata_unit_cnt_ = 0;
+  std::vector<MetadataUnit> units_;
 };
 
 }  // namespace av2_obu

@@ -10,34 +10,59 @@
  */
 
 #pragma once
+#include <nlohmann/json.hpp>
+
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include <av2_obu/core/av2_types.h>
 #include <av2_obu/core/bitstream_reader.h>
 
 namespace av2_obu {
 
+// Metadata Unit that contains metadata unit header and payload
+// This class is used by both MetadataOBU and MetadataGroupOBU
 class MetadataUnit {
 public:
-  MetadataUnit();
+  MetadataUnit() = default;
 
-  bool read(BitstreamReader& br);
+  // Parse simple metadata unit header
+  bool parse_simple_header(BitstreamReader& br);
+
+  // Parse metadata group unit header
+  bool parse_group_header(BitstreamReader& br, uint32_t obu_xlayer_id);
+
+  // Parse metadata_unit payload
+  bool parse_payload(BitstreamReader& br);
+
   void dump() const;
+  nlohmann::ordered_json to_json() const;
 
   // Getters
-  MetadataType get_metadata_type() const;
-  uint32_t get_payload_size() const;
-  bool is_cancelled() const;
+  MetadataType get_metadata_type() const { return to_metadata_type(metadata_type_); }
+  uint32_t get_header_size() const { return muh_header_size_; }
+  bool is_cancelled() const { return muh_cancel_flag_ != 0; }
+  uint32_t get_payload_size() const { return muh_payload_size_; }
+  uint32_t get_layer_idc() const { return muh_layer_idc_; }
+  uint32_t get_persistence_idc() const { return muh_persistence_idc_; }
+  uint32_t get_priority() const { return muh_priority_; }
 
 private:
-  uint32_t muh_metadata_type;
-  uint32_t muh_header_size;
-  uint32_t muh_cancel_flag;
-  uint32_t muh_payload_size;
-  uint32_t muh_layer_idc;
-  uint32_t muh_persistence_idc;
-  uint32_t muh_priority;
+  // Metadata unit header fields
+  uint32_t metadata_type_ = 0;
+  uint32_t muh_header_size_ = 0;        // 1 for simple, actual size for group
+  uint32_t muh_cancel_flag_ = 0;
+  uint32_t muh_payload_size_ = 0;       // 0 for simple (not signaled)
+  uint32_t muh_layer_idc_ = 0;
+  uint32_t muh_persistence_idc_ = 0;
+  uint32_t muh_priority_ = 0;           // 0 for simple
+  uint32_t muh_reserved_zero_2bits_ = 0;
+  uint32_t muh_xlayer_map_ = 0;         // 0 for simple
+  std::vector<uint8_t> muh_mlayer_maps_;
+  std::vector<uint8_t> muh_header_extension_bytes_;
+
+  // TODO: Add specific metadata payload fields based on type
 };
 
 }  // namespace av2_obu

@@ -32,9 +32,8 @@
 #include <av2_obu/obus/leading_sef_obu.h>
 #include <av2_obu/obus/leading_tile_group_obu.h>
 #include <av2_obu/obus/leading_tip_obu.h>
+#include <av2_obu/obus/metadata_group_obu.h>
 #include <av2_obu/obus/metadata_obu.h>
-#include <av2_obu/obus/metadata_obu_impl.h>
-#include <av2_obu/obus/metadata_obu_wrapper.h>
 #include <av2_obu/obus/metadata_unit.h>
 #include <av2_obu/obus/msdo_obu.h>
 #include <av2_obu/obus/multi_frame_header_obu.h>

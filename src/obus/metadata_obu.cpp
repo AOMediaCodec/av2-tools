@@ -11,39 +11,54 @@
 
 #include <spdlog/spdlog.h>
 
+#include <av2_obu/core/bitstream_reader.h>
 #include <av2_obu/obus/metadata_obu.h>
 
 namespace av2_obu {
 
-bool MetadataOBU::read(BitstreamReader& br) {
-  uint8_t first = static_cast<uint8_t>(br.read_bits(8));
-
-  metadata_is_suffix = (first >> 7) & 0x1;
-  metadata_necessity_idc = (first >> 5) & 0x3;
-  metadata_application_id = first & 0x1F;
-
-  metadata_unit_cnt = br.read_leb128();
-
-  metadata_units.clear();
-  for (uint32_t i = 0; i < metadata_unit_cnt; ++i) {
-    MetadataUnit unit;
-    if (!unit.read(br))
-      return false;
-    metadata_units.push_back(unit);
+bool MetadataOBU::parse_payload(std::ifstream& ifs) {
+  if (position_.payload_size == 0) {
+    spdlog::warn("Metadata OBU has no payload");
+    return true;
   }
-  return true;
+
+  spdlog::debug("Parsing metadata OBU payload ({} bytes)", position_.payload_size);
+
+  try {
+    BitstreamReader br(ifs, position_.payload_size);
+
+    // Parse OBU-level field
+    metadata_is_suffix_ = static_cast<uint8_t>(br.read_bits(1));
+    spdlog::debug("  metadata_is_suffix: {}", int(metadata_is_suffix_));
+
+    // Parse short metadata unit header
+    if (!metadata_unit_.parse_simple_header(br)) {
+      spdlog::warn("Failed to parse metadata unit header");
+      return true;
+    }
+
+    // Parse metadata unit payload if not cancelled
+    if (!metadata_unit_.is_cancelled()) {
+      if (!metadata_unit_.parse_payload(br)) {
+        spdlog::warn("Failed to parse metadata unit payload");
+      }
+    }
+
+    return true;
+  } catch (const std::exception& e) {
+    spdlog::warn("Failed to parse metadata OBU ({}), continuing with next OBU", e.what());
+    return true;
+  }
 }
 
-void MetadataOBU::dump() const {
-  spdlog::debug("       MetadataOBU {{");
-  spdlog::debug("         is_suffix={}, necessity_idc={}, application_id={}, unit_cnt={}",
-                int(metadata_is_suffix), int(metadata_necessity_idc), int(metadata_application_id),
-                metadata_unit_cnt);
-  for (size_t i = 0; i < metadata_units.size(); ++i) {
-    spdlog::debug("         unit[{}]:", i);
-    metadata_units[i].dump();
-  }
-  spdlog::debug("       }}");
+json MetadataOBU::to_json() const {
+  json j = BaseOBU::to_json();
+  j["payload"] = {{"metadata_is_suffix", metadata_is_suffix_}};
+
+  // Add metadata unit
+  j["payload"]["metadata_unit"] = metadata_unit_.to_json();
+
+  return j;
 }
 
 }  // namespace av2_obu

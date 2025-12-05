@@ -10,34 +10,37 @@
  */
 
 #pragma once
-#include <cstdint>
-#include <vector>
 
-#include <av2_obu/core/bitstream_reader.h>
+#include <av2_obu/core/av2_types.h>
+#include <av2_obu/core/base_obu.h>
 #include <av2_obu/obus/metadata_unit.h>
 
 namespace av2_obu {
 
-class MetadataOBU {
+// Metadata OBU that contains single metadata unit
+class MetadataOBU : public BaseOBU {
 public:
-  MetadataOBU() = default;
+  explicit MetadataOBU(const OBUPosition& pos) : BaseOBU(pos) {}
 
-  bool read(BitstreamReader& br);
-  void dump() const;
+  json to_json() const override;
+  std::string type_name() const override { return "OBU_METADATA"; }
 
   // Accessors
-  uint8_t get_is_suffix() const { return metadata_is_suffix; }
-  uint8_t get_necessity_idc() const { return metadata_necessity_idc; }
-  uint8_t get_application_id() const { return metadata_application_id; }
-  uint32_t get_unit_count() const { return metadata_unit_cnt; }
-  const std::vector<MetadataUnit>& get_units() const { return metadata_units; }
+  uint8_t get_is_suffix() const { return metadata_is_suffix_; }
+  const MetadataUnit& get_metadata_unit() const { return metadata_unit_; }
+
+protected:
+  bool parse_payload(std::ifstream& ifs) override;
 
 private:
-  uint8_t metadata_is_suffix = 0;
-  uint8_t metadata_necessity_idc = 0;
-  uint8_t metadata_application_id = 0;
-  uint32_t metadata_unit_cnt = 0;
-  std::vector<MetadataUnit> metadata_units;
+  // OBU-level field
+  uint8_t metadata_is_suffix_ = 0;
+
+  // Metadata unit (contains header + payload)
+  MetadataUnit metadata_unit_;
+
+  // metadata_application_idc = 0 (implicit per spec)
+  // metadata_necessity_idc = 0 (implicit per spec)
 };
 
 }  // namespace av2_obu

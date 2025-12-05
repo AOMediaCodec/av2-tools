@@ -75,6 +75,15 @@ enum class MetadataType : uint32_t {
   UNKNOWN_METADATA = 999  // For invalid/unknown metadata types
 };
 
+// muh_layer_idc
+enum class LayerIdc : uint32_t {
+  LAYER_UNSPECIFIED = 0,  // Does not specify to what layers metadata applies
+  LAYER_GLOBAL = 1,       // Applies to all layers (or matching obu_xlayer_id if < 31)
+  LAYER_CURRENT = 2,      // Applies to current layer only (obu_xlayer_id and obu_mlayer_id)
+  LAYER_VALUES = 3,       // Applies to explicitly signaled layer values
+  // 4-7 Reserved for AOM use
+};
+
 // Color primaries
 enum ColorPrimaries : uint32_t {
   CP_BT_709 = 1,        // [ITU-R-BT.709]
