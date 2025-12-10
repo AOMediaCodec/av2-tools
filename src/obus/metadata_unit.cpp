@@ -120,7 +120,11 @@ bool MetadataUnit::parse_payload(BitstreamReader& br) {
 
   switch (type) {
     case MetadataType::HDR_CLL:
-      spdlog::debug("    TODO: Parse HDR_CLL metadata");
+      spdlog::debug("    Parsing HDR_CLL metadata");
+      max_cll_ = static_cast<uint16_t>(br.read_bits(16));
+      max_fall_ = static_cast<uint16_t>(br.read_bits(16));
+      spdlog::debug("      max_cll: {}", max_cll_);
+      spdlog::debug("      max_fall: {}", max_fall_);
       break;
 
     case MetadataType::HDR_MDCV:
@@ -178,6 +182,13 @@ void MetadataUnit::dump() const {
     if (muh_priority_ > 0) {
       spdlog::debug("      muh_priority: {}", muh_priority_);
     }
+
+    // Display metadata payload fields
+    MetadataType type = get_metadata_type();
+    if (type == MetadataType::HDR_CLL) {
+      spdlog::debug("      max_cll: {}", max_cll_);
+      spdlog::debug("      max_fall: {}", max_fall_);
+    }
   }
 
   spdlog::debug("    }}");
@@ -206,6 +217,13 @@ nlohmann::ordered_json MetadataUnit::to_json() const {
       if (!muh_mlayer_maps_.empty()) {
         j["muh_mlayer_maps"] = muh_mlayer_maps_;
       }
+    }
+
+    // Add metadata payload fields to JSON
+    MetadataType type = get_metadata_type();
+    if (type == MetadataType::HDR_CLL) {
+      j["max_cll"] = max_cll_;
+      j["max_fall"] = max_fall_;
     }
   }
 

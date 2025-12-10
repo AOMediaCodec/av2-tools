@@ -62,7 +62,10 @@ private:
   std::vector<uint8_t> muh_mlayer_maps_;
   std::vector<uint8_t> muh_header_extension_bytes_;
 
-  // TODO: Add specific metadata payload fields based on type
+  // Metadata payload fields
+  // HDR_CLL (Content Light Level)
+  uint16_t max_cll_ = 0;
+  uint16_t max_fall_ = 0;
 };
 
 }  // namespace av2_obu
