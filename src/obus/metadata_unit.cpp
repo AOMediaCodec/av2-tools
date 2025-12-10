@@ -118,6 +118,16 @@ bool MetadataUnit::parse_payload(BitstreamReader& br) {
   MetadataType type = get_metadata_type();
   spdlog::debug("  Parsing metadata_unit payload for type: {}", to_string(type));
 
+  // For metadata group units, we know the exact payload size
+  // Track position to ensure we consume the correct number of bytes
+  uint32_t start_bit_pos = 0;
+  bool has_payload_size = (muh_payload_size_ > 0);
+
+  if (has_payload_size) {
+    start_bit_pos = static_cast<uint32_t>(br.bits_read());
+    spdlog::debug("    Payload size: {} bytes ({} bits)", muh_payload_size_, muh_payload_size_ * 8);
+  }
+
   switch (type) {
     case MetadataType::HDR_CLL:
       spdlog::debug("    Parsing HDR_CLL metadata");
@@ -208,6 +218,33 @@ bool MetadataUnit::parse_payload(BitstreamReader& br) {
     default:
       spdlog::debug("    Unknown or reserved metadata type");
       break;
+  }
+
+  // For metadata group units with known payload size, ensure we consume exactly the right amount
+  if (has_payload_size) {
+    uint32_t current_bit_pos = static_cast<uint32_t>(br.bits_read());
+    uint32_t bits_consumed = current_bit_pos - start_bit_pos;
+    uint32_t expected_bits = muh_payload_size_ * 8;
+
+    if (bits_consumed < expected_bits) {
+      uint32_t bits_to_skip = expected_bits - bits_consumed;
+      spdlog::debug("    Skipping {} remaining payload bits ({} bytes)", bits_to_skip, bits_to_skip / 8);
+
+      // Skip remaining bits
+      while (bits_to_skip >= 32) {
+        br.read_bits(32);
+        bits_to_skip -= 32;
+      }
+      if (bits_to_skip > 0) {
+        br.read_bits(bits_to_skip);
+      }
+    } else if (bits_consumed > expected_bits) {
+      spdlog::warn("    Consumed {} bits but expected {} bits - payload parsing may be incorrect",
+                   bits_consumed, expected_bits);
+      return false;
+    }
+
+    spdlog::debug("    Successfully consumed {} bytes of payload", muh_payload_size_);
   }
 
   return true;
