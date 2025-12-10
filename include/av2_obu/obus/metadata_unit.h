@@ -66,6 +66,21 @@ private:
   // HDR_CLL (Content Light Level)
   uint16_t max_cll_ = 0;
   uint16_t max_fall_ = 0;
+
+  // TIMECODE
+  uint8_t counting_type_ = 0;
+  uint8_t full_timestamp_flag_ = 0;
+  uint8_t discontinuity_flag_ = 0;
+  uint8_t cnt_dropped_flag_ = 0;
+  uint16_t n_frames_ = 0;
+  uint8_t seconds_value_ = 0;
+  uint8_t minutes_value_ = 0;
+  uint8_t hours_value_ = 0;
+  uint8_t seconds_flag_ = 0;
+  uint8_t minutes_flag_ = 0;
+  uint8_t hours_flag_ = 0;
+  uint8_t time_offset_length_ = 0;
+  uint32_t time_offset_value_ = 0;
 };
 
 }  // namespace av2_obu

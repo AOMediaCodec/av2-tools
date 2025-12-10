@@ -140,7 +140,53 @@ bool MetadataUnit::parse_payload(BitstreamReader& br) {
       break;
 
     case MetadataType::TIMECODE:
-      spdlog::debug("    TODO: Parse TIMECODE metadata");
+      spdlog::debug("    Parsing TIMECODE metadata");
+      counting_type_ = static_cast<uint8_t>(br.read_bits(5));
+      full_timestamp_flag_ = static_cast<uint8_t>(br.read_bits(1));
+      discontinuity_flag_ = static_cast<uint8_t>(br.read_bits(1));
+      cnt_dropped_flag_ = static_cast<uint8_t>(br.read_bits(1));
+      n_frames_ = static_cast<uint16_t>(br.read_bits(9));
+
+      spdlog::debug("      counting_type: {}", int(counting_type_));
+      spdlog::debug("      full_timestamp_flag: {}", int(full_timestamp_flag_));
+      spdlog::debug("      discontinuity_flag: {}", int(discontinuity_flag_));
+      spdlog::debug("      cnt_dropped_flag: {}", int(cnt_dropped_flag_));
+      spdlog::debug("      n_frames: {}", n_frames_);
+
+      if (full_timestamp_flag_) {
+        seconds_value_ = static_cast<uint8_t>(br.read_bits(6));
+        minutes_value_ = static_cast<uint8_t>(br.read_bits(6));
+        hours_value_ = static_cast<uint8_t>(br.read_bits(5));
+        spdlog::debug("      seconds_value: {}", int(seconds_value_));
+        spdlog::debug("      minutes_value: {}", int(minutes_value_));
+        spdlog::debug("      hours_value: {}", int(hours_value_));
+      } else {
+        seconds_flag_ = static_cast<uint8_t>(br.read_bits(1));
+        spdlog::debug("      seconds_flag: {}", int(seconds_flag_));
+        if (seconds_flag_) {
+          seconds_value_ = static_cast<uint8_t>(br.read_bits(6));
+          minutes_flag_ = static_cast<uint8_t>(br.read_bits(1));
+          spdlog::debug("      seconds_value: {}", int(seconds_value_));
+          spdlog::debug("      minutes_flag: {}", int(minutes_flag_));
+          if (minutes_flag_) {
+            minutes_value_ = static_cast<uint8_t>(br.read_bits(6));
+            hours_flag_ = static_cast<uint8_t>(br.read_bits(1));
+            spdlog::debug("      minutes_value: {}", int(minutes_value_));
+            spdlog::debug("      hours_flag: {}", int(hours_flag_));
+            if (hours_flag_) {
+              hours_value_ = static_cast<uint8_t>(br.read_bits(5));
+              spdlog::debug("      hours_value: {}", int(hours_value_));
+            }
+          }
+        }
+      }
+
+      time_offset_length_ = static_cast<uint8_t>(br.read_bits(5));
+      spdlog::debug("      time_offset_length: {}", int(time_offset_length_));
+      if (time_offset_length_ > 0) {
+        time_offset_value_ = static_cast<uint32_t>(br.read_bits(time_offset_length_));
+        spdlog::debug("      time_offset_value: {}", time_offset_value_);
+      }
       break;
 
     case MetadataType::BANDING_HINTS:
@@ -188,6 +234,25 @@ void MetadataUnit::dump() const {
     if (type == MetadataType::HDR_CLL) {
       spdlog::debug("      max_cll: {}", max_cll_);
       spdlog::debug("      max_fall: {}", max_fall_);
+    } else if (type == MetadataType::TIMECODE) {
+      spdlog::debug("      counting_type: {}", int(counting_type_));
+      spdlog::debug("      full_timestamp_flag: {}", int(full_timestamp_flag_));
+      spdlog::debug("      discontinuity_flag: {}", int(discontinuity_flag_));
+      spdlog::debug("      cnt_dropped_flag: {}", int(cnt_dropped_flag_));
+      spdlog::debug("      n_frames: {}", n_frames_);
+      if (full_timestamp_flag_ || seconds_flag_) {
+        spdlog::debug("      seconds_value: {}", int(seconds_value_));
+      }
+      if (full_timestamp_flag_ || minutes_flag_) {
+        spdlog::debug("      minutes_value: {}", int(minutes_value_));
+      }
+      if (full_timestamp_flag_ || hours_flag_) {
+        spdlog::debug("      hours_value: {}", int(hours_value_));
+      }
+      if (time_offset_length_ > 0) {
+        spdlog::debug("      time_offset_length: {}", int(time_offset_length_));
+        spdlog::debug("      time_offset_value: {}", time_offset_value_);
+      }
     }
   }
 
@@ -224,6 +289,34 @@ nlohmann::ordered_json MetadataUnit::to_json() const {
     if (type == MetadataType::HDR_CLL) {
       j["max_cll"] = max_cll_;
       j["max_fall"] = max_fall_;
+    } else if (type == MetadataType::TIMECODE) {
+      j["counting_type"] = counting_type_;
+      j["full_timestamp_flag"] = full_timestamp_flag_;
+      j["discontinuity_flag"] = discontinuity_flag_;
+      j["cnt_dropped_flag"] = cnt_dropped_flag_;
+      j["n_frames"] = n_frames_;
+      if (full_timestamp_flag_ || seconds_flag_) {
+        j["seconds_value"] = seconds_value_;
+      }
+      if (full_timestamp_flag_ || minutes_flag_) {
+        j["minutes_value"] = minutes_value_;
+      }
+      if (full_timestamp_flag_ || hours_flag_) {
+        j["hours_value"] = hours_value_;
+      }
+      if (!full_timestamp_flag_) {
+        j["seconds_flag"] = seconds_flag_;
+        if (seconds_flag_) {
+          j["minutes_flag"] = minutes_flag_;
+          if (minutes_flag_) {
+            j["hours_flag"] = hours_flag_;
+          }
+        }
+      }
+      if (time_offset_length_ > 0) {
+        j["time_offset_length"] = time_offset_length_;
+        j["time_offset_value"] = time_offset_value_;
+      }
     }
   }
 
