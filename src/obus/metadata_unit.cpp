@@ -226,6 +226,12 @@ bool MetadataUnit::parse_payload(BitstreamReader& br) {
     uint32_t bits_consumed = current_bit_pos - start_bit_pos;
     uint32_t expected_bits = muh_payload_size_ * 8;
 
+    // Check for non-byte-aligned parsing
+    if (bits_consumed % 8 != 0) {
+      spdlog::debug("    Metadata payload parsing ended at non-byte-aligned position ({} bits, {} remainder)",
+                    bits_consumed, bits_consumed % 8);
+    }
+
     if (bits_consumed < expected_bits) {
       uint32_t bits_to_skip = expected_bits - bits_consumed;
       spdlog::debug("    Skipping {} remaining payload bits ({} bytes)", bits_to_skip, bits_to_skip / 8);
