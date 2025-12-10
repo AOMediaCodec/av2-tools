@@ -11,6 +11,8 @@
 
 #include <spdlog/spdlog.h>
 
+#include <cstdio>
+
 #include <av2_obu/obus/metadata_unit.h>
 
 namespace av2_obu {
@@ -212,7 +214,53 @@ bool MetadataUnit::parse_payload(BitstreamReader& br) {
       break;
 
     case MetadataType::HASH:
-      spdlog::debug("    TODO: Parse HASH metadata");
+      spdlog::debug("    Parsing HASH metadata (decoded frame hash)");
+      {
+        // Parse header byte
+        hash_type_ = static_cast<uint8_t>(br.read_bits(4));
+        per_plane_ = static_cast<uint8_t>(br.read_bits(1));
+        has_grain_ = static_cast<uint8_t>(br.read_bits(1));
+        hash_reserved_ = static_cast<uint8_t>(br.read_bits(2));
+
+        spdlog::debug("      hash_type: {}", int(hash_type_));
+        spdlog::debug("      per_plane: {}", int(per_plane_));
+        spdlog::debug("      has_grain: {}", int(has_grain_));
+        spdlog::debug("      reserved: {}", int(hash_reserved_));
+
+        // Determine number of hashes to read
+        uint32_t num_hashes = 1;  // Default: single frame_hash
+        if (per_plane_) {
+          // Per-plane hashes: determine num_planes
+          if (has_payload_size && muh_payload_size_ > 0) {
+            // payload_size = 1 byte header + (num_planes * 16 bytes)
+            uint32_t hash_bytes = muh_payload_size_ - 1;
+            num_hashes = hash_bytes / 16;
+            spdlog::debug("      num_planes (from payload size): {}", num_hashes);
+          } else {
+            // Default assumption: 3 planes for YUV
+            num_hashes = 3;
+            spdlog::debug("      num_planes (assumed): {}", num_hashes);
+          }
+        } else {
+          spdlog::debug("      Single frame_hash (all planes combined)");
+        }
+
+        // Read hashes (16 bytes each, little-endian)
+        hashes_.clear();
+        for (uint32_t i = 0; i < num_hashes; i++) {
+          std::array<uint8_t, 16> hash;
+          for (int j = 0; j < 16; j++) {
+            hash[j] = static_cast<uint8_t>(br.read_bits(8));
+          }
+          hashes_.push_back(hash);
+
+          // Log hash in hex format
+          const char* hash_label = per_plane_ ? "plane_hash" : "frame_hash";
+          spdlog::debug("      {}[{}]: {:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+                        hash_label, i, hash[0], hash[1], hash[2], hash[3], hash[4], hash[5], hash[6], hash[7],
+                        hash[8], hash[9], hash[10], hash[11], hash[12], hash[13], hash[14], hash[15]);
+        }
+      }
       break;
 
     default:
@@ -296,6 +344,17 @@ void MetadataUnit::dump() const {
         spdlog::debug("      time_offset_length: {}", int(time_offset_length_));
         spdlog::debug("      time_offset_value: {}", time_offset_value_);
       }
+    } else if (type == MetadataType::HASH) {
+      spdlog::debug("      hash_type: {}", int(hash_type_));
+      spdlog::debug("      per_plane: {}", int(per_plane_));
+      spdlog::debug("      has_grain: {}", int(has_grain_));
+      const char* hash_label = per_plane_ ? "plane_hash" : "frame_hash";
+      for (size_t i = 0; i < hashes_.size(); i++) {
+        const auto& hash = hashes_[i];
+        spdlog::debug("      {}[{}]: {:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+                      hash_label, i, hash[0], hash[1], hash[2], hash[3], hash[4], hash[5], hash[6], hash[7],
+                      hash[8], hash[9], hash[10], hash[11], hash[12], hash[13], hash[14], hash[15]);
+      }
     }
   }
 
@@ -359,6 +418,34 @@ nlohmann::ordered_json MetadataUnit::to_json() const {
       if (time_offset_length_ > 0) {
         j["time_offset_length"] = time_offset_length_;
         j["time_offset_value"] = time_offset_value_;
+      }
+    } else if (type == MetadataType::HASH) {
+      j["hash_type"] = hash_type_;
+      j["per_plane"] = per_plane_;
+      j["has_grain"] = has_grain_;
+      if (hash_reserved_ != 0) {
+        j["reserved"] = hash_reserved_;
+      }
+
+      // Format hashes as hex strings with appropriate field name
+      nlohmann::json hash_array = nlohmann::json::array();
+      for (const auto& hash : hashes_) {
+        char hex_string[33];  // 32 hex chars + null terminator
+        snprintf(hex_string, sizeof(hex_string),
+                 "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
+                 hash[0], hash[1], hash[2], hash[3], hash[4], hash[5], hash[6], hash[7],
+                 hash[8], hash[9], hash[10], hash[11], hash[12], hash[13], hash[14], hash[15]);
+        hash_array.push_back(std::string(hex_string));
+      }
+
+      // Use appropriate field name based on per_plane flag
+      if (per_plane_) {
+        j["plane_hashes"] = hash_array;
+      } else {
+        // Single frame hash - export as single value, not array
+        if (!hash_array.empty()) {
+          j["frame_hash"] = hash_array[0];
+        }
       }
     }
   }

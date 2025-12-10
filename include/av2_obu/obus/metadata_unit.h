@@ -12,6 +12,7 @@
 #pragma once
 #include <nlohmann/json.hpp>
 
+#include <array>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -81,6 +82,13 @@ private:
   uint8_t hours_flag_ = 0;
   uint8_t time_offset_length_ = 0;
   uint32_t time_offset_value_ = 0;
+
+  // HASH (decoded frame hash)
+  uint8_t hash_type_ = 0;
+  uint8_t per_plane_ = 0;
+  uint8_t has_grain_ = 0;
+  uint8_t hash_reserved_ = 0;
+  std::vector<std::array<uint8_t, 16>> hashes_;  // Each hash is 16 bytes (frame_hash or plane_hash)
 };
 
 }  // namespace av2_obu
