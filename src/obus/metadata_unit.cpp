@@ -220,27 +220,22 @@ bool MetadataUnit::parse_payload(BitstreamReader& br) {
         hash_type_ = static_cast<uint8_t>(br.read_bits(4));
         per_plane_ = static_cast<uint8_t>(br.read_bits(1));
         has_grain_ = static_cast<uint8_t>(br.read_bits(1));
-        hash_reserved_ = static_cast<uint8_t>(br.read_bits(2));
+        is_monochrome_ = static_cast<uint8_t>(br.read_bits(1));
+        hash_reserved_ = static_cast<uint8_t>(br.read_bits(1));
 
         spdlog::debug("      hash_type: {}", int(hash_type_));
         spdlog::debug("      per_plane: {}", int(per_plane_));
         spdlog::debug("      has_grain: {}", int(has_grain_));
+        spdlog::debug("      is_monochrome: {}", int(is_monochrome_));
         spdlog::debug("      reserved: {}", int(hash_reserved_));
 
         // Determine number of hashes to read
         uint32_t num_hashes = 1;  // Default: single frame_hash
         if (per_plane_) {
-          // Per-plane hashes: determine num_planes
-          if (has_payload_size && muh_payload_size_ > 0) {
-            // payload_size = 1 byte header + (num_planes * 16 bytes)
-            uint32_t hash_bytes = muh_payload_size_ - 1;
-            num_hashes = hash_bytes / 16;
-            spdlog::debug("      num_planes (from payload size): {}", num_hashes);
-          } else {
-            // Default assumption: 3 planes for YUV
-            num_hashes = 3;
-            spdlog::debug("      num_planes (assumed): {}", num_hashes);
-          }
+          // Per-plane hashes: numPlanes = is_monochrome ? 1 : 3
+          uint32_t num_planes = is_monochrome_ ? 1 : 3;
+          num_hashes = num_planes;
+          spdlog::debug("      num_planes: {}", num_planes);
         } else {
           spdlog::debug("      Single frame_hash (all planes combined)");
         }
@@ -348,6 +343,7 @@ void MetadataUnit::dump() const {
       spdlog::debug("      hash_type: {}", int(hash_type_));
       spdlog::debug("      per_plane: {}", int(per_plane_));
       spdlog::debug("      has_grain: {}", int(has_grain_));
+      spdlog::debug("      is_monochrome: {}", int(is_monochrome_));
       const char* hash_label = per_plane_ ? "plane_hash" : "frame_hash";
       for (size_t i = 0; i < hashes_.size(); i++) {
         const auto& hash = hashes_[i];
@@ -423,6 +419,7 @@ nlohmann::ordered_json MetadataUnit::to_json() const {
       j["hash_type"] = hash_type_;
       j["per_plane"] = per_plane_;
       j["has_grain"] = has_grain_;
+      j["is_monochrome"] = is_monochrome_;
       if (hash_reserved_ != 0) {
         j["reserved"] = hash_reserved_;
       }
