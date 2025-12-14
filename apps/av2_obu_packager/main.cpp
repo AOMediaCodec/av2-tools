@@ -14,8 +14,7 @@
 #include <spdlog/spdlog.h>
 
 #include "packaging_strategy.h"
-#include "temporal_unit_builder.h"
-#include <av2_obu/core/obu_parser.h>
+#include <av2_obu/av2_obu.h>
 
 // libisomedia headers
 #include <fstream>
@@ -71,15 +70,31 @@ int main(int argc, char** argv) {
   spdlog::info("");
 
   // ========================================================================
-  // PHASE 1: Parse bitstream
+  // PHASE 1: Parse bitstream and build temporal units
   // ========================================================================
   spdlog::info("Phase 1: Parsing bitstream...");
+
   OBUParser parser;
+
+  OBUParser::TemporalUnitOptions tu_opts;
+  if (force_td_mode) {
+    tu_opts.mode = OBUParser::TemporalUnitOptions::Mode::kTemporalDelimiter;
+  } else if (force_frame_hack) {
+    tu_opts.mode = OBUParser::TemporalUnitOptions::Mode::kFrameHeuristic;
+  } else {
+    tu_opts.mode = OBUParser::TemporalUnitOptions::Mode::kAuto;
+  }
+  tu_opts.include_temporal_delimiters = !drop_tds;
+
+  parser.set_temporal_unit_options(tu_opts);
+
   if (!parser.parse_file(input)) {
     spdlog::error("Failed to parse bitstream");
     return 1;
   }
+
   spdlog::info("  Parsed {} OBUs", parser.obu_count());
+  spdlog::info("  Built {} temporal units", parser.temporal_unit_count());
   spdlog::info("");
 
   // ========================================================================
@@ -99,38 +114,32 @@ int main(int argc, char** argv) {
   spdlog::info("");
 
   // ========================================================================
-  // PHASE 3: Determine packaging strategy
+  // PHASE 3: Access temporal units from parser
   // ========================================================================
-  spdlog::info("Phase 3: Determining packaging strategy...");
+  spdlog::info("Phase 3: Processing temporal units...");
 
-  UserOptions user_opts;
-  user_opts.frame_rate = frame_rate;
-  user_opts.drop_temporal_delimiters = drop_tds;
-  user_opts.force_td_mode = force_td_mode;
-  user_opts.force_frame_hack = force_frame_hack;
-
-  auto strategy = determine_strategy(stats, user_opts);
-  spdlog::info("");
-
-  // ========================================================================
-  // PHASE 4: Build temporal units
-  // ========================================================================
-  spdlog::info("Phase 4: Building temporal units...");
-  TemporalUnitBuilder tu_builder;
-  auto temporal_units = tu_builder.build(parser.obus(), strategy);
+  const auto& temporal_units = parser.temporal_units();
 
   if (temporal_units.empty()) {
     spdlog::error("No temporal units created!");
     return 1;
   }
 
-  spdlog::info("Created {} temporal units (MP4 samples)", temporal_units.size());
+  size_t keyframe_count = 0;
+  for (const auto& tu : temporal_units) {
+    if (tu.is_keyframe()) {
+      keyframe_count++;
+    }
+  }
+
+  spdlog::info("  {} temporal units (MP4 samples)", temporal_units.size());
+  spdlog::info("  {} keyframe samples", keyframe_count);
   spdlog::info("");
 
   // ========================================================================
-  // PHASE 5: Write MP4 (TODO: Implement fully)
+  // PHASE 4: Write MP4 (TODO: Implement fully)
   // ========================================================================
-  spdlog::info("Phase 5: Writing MP4...");
+  spdlog::info("Phase 4: Writing MP4...");
   spdlog::warn("MP4 writing not yet fully implemented!");
   spdlog::warn("TODO:");
   spdlog::warn("  - Create sample entry with av2C box");

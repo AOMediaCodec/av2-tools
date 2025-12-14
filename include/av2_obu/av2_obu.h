@@ -20,6 +20,7 @@
 #include <av2_obu/core/base_obu.h>
 #include <av2_obu/core/bitstream_reader.h>
 #include <av2_obu/core/obu_parser.h>
+#include <av2_obu/core/temporal_unit.h>
 
 // OBU implementations
 #include <av2_obu/obus/atlas_segment_obu.h>

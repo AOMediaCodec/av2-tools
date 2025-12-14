@@ -1,7 +1,6 @@
 add_executable(av2_obu_packager
   main.cpp
   packaging_strategy.cpp
-  temporal_unit_builder.cpp
 )
 
 target_link_libraries(av2_obu_packager

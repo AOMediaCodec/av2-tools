@@ -35,6 +35,7 @@ bool OBUParser::parse_file(const std::string& filename) {
 
   // Clear previous state
   obus_.clear();
+  temporal_units_.clear();
   current_file_ = filename;
 
   // Scan the file
@@ -43,7 +44,10 @@ bool OBUParser::parse_file(const std::string& filename) {
     return false;
   }
 
-  spdlog::debug("Successfully parsed {} OBUs", obus_.size());
+  build_temporal_units();
+
+  spdlog::debug("Successfully parsed {} OBUs, {} temporal units", obus_.size(),
+                temporal_units_.size());
   return true;
 }
 
@@ -266,6 +270,115 @@ uint32_t OBUParser::read_annex_b_size(std::ifstream& ifs, uint32_t& value) {
   }
 
   return byte_count;
+}
+
+void OBUParser::build_temporal_units() {
+  temporal_units_.clear();
+
+  auto mode = tu_options_.mode;
+  if (mode == TemporalUnitOptions::Mode::kAuto) {
+    bool has_tds = std::any_of(
+      obus_.begin(), obus_.end(),
+      [](const auto& obu) { return obu->type() == OBUType::TEMPORAL_DELIMITER; });
+
+    mode = has_tds ? TemporalUnitOptions::Mode::kTemporalDelimiter
+                   : TemporalUnitOptions::Mode::kFrameHeuristic;
+
+    spdlog::debug("Auto-detected TU mode: {}",
+                  mode == TemporalUnitOptions::Mode::kTemporalDelimiter ? "TD-based"
+                                                                          : "frame-based");
+  }
+
+  switch (mode) {
+    case TemporalUnitOptions::Mode::kTemporalDelimiter:
+      build_tus_td_based();
+      break;
+    case TemporalUnitOptions::Mode::kFrameHeuristic:
+      build_tus_frame_based();
+      break;
+    case TemporalUnitOptions::Mode::kOrderHint:
+      spdlog::warn("order_hint mode not yet implemented, falling back to frame-based");
+      build_tus_frame_based();
+      break;
+    default:
+      break;
+  }
+}
+
+void OBUParser::build_tus_td_based() {
+  TemporalUnit current_tu;
+  current_tu.index_ = 0;
+
+  for (const auto& obu : obus_) {
+    if (is_config_obu(obu.get())) {
+      continue;
+    }
+
+    if (obu->type() == OBUType::TEMPORAL_DELIMITER) {
+      if (!current_tu.empty()) {
+        current_tu.is_keyframe_ = current_tu.is_keyframe();
+        temporal_units_.push_back(std::move(current_tu));
+        current_tu = TemporalUnit();
+        current_tu.index_ = temporal_units_.size();
+      }
+
+      if (tu_options_.include_temporal_delimiters) {
+        current_tu.obus_.push_back(obu.get());
+      }
+    } else {
+      current_tu.obus_.push_back(obu.get());
+    }
+  }
+
+  if (!current_tu.empty()) {
+    current_tu.is_keyframe_ = current_tu.is_keyframe();
+    temporal_units_.push_back(std::move(current_tu));
+  }
+
+  spdlog::debug("Built {} temporal units (TD-based)", temporal_units_.size());
+}
+
+void OBUParser::build_tus_frame_based() {
+  TemporalUnit current_tu;
+  current_tu.index_ = 0;
+
+  auto is_frame_obu = [](const BaseOBU* obu) {
+    auto type = obu->type();
+    return type == OBUType::CLK || type == OBUType::OLK || type == OBUType::REGULAR_TILE_GROUP ||
+           type == OBUType::LEADING_TILE_GROUP;
+  };
+
+  for (const auto& obu : obus_) {
+    if (is_config_obu(obu.get())) {
+      continue;
+    }
+
+    if (obu->type() == OBUType::TEMPORAL_DELIMITER && !tu_options_.include_temporal_delimiters) {
+      continue;
+    }
+
+    if (is_frame_obu(obu.get()) && !current_tu.empty()) {
+      current_tu.is_keyframe_ = current_tu.is_keyframe();
+      temporal_units_.push_back(std::move(current_tu));
+      current_tu = TemporalUnit();
+      current_tu.index_ = temporal_units_.size();
+    }
+
+    current_tu.obus_.push_back(obu.get());
+  }
+
+  if (!current_tu.empty()) {
+    current_tu.is_keyframe_ = current_tu.is_keyframe();
+    temporal_units_.push_back(std::move(current_tu));
+  }
+
+  spdlog::debug("Built {} temporal units (frame-based)", temporal_units_.size());
+}
+
+bool OBUParser::is_config_obu(const BaseOBU* obu) const {
+  auto type = obu->type();
+  return type == OBUType::SEQUENCE_HEADER || type == OBUType::LAYER_CONFIGURATION_RECORD ||
+         type == OBUType::OPERATING_POINT_SET;
 }
 
 }  // namespace av2_obu

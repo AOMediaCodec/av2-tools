@@ -45,6 +45,7 @@ target_sources(av2_obu
     src/core/bitstream_reader.cpp
     src/core/av2_sequence_header.cpp
     src/core/av2_types.cpp
+    src/core/temporal_unit.cpp
 
     # Specific OBU implementations
     src/obus/sequence_header_obu.cpp
@@ -85,6 +86,7 @@ target_sources(av2_obu
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/av2_obu/core/bitstream_reader.h>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/av2_obu/core/av2_sequence_header.h>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/av2_obu/core/av2_types.h>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/av2_obu/core/temporal_unit.h>
 
     # OBU headers
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/av2_obu/obus/sequence_header_obu.h>

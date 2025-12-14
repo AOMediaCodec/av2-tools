@@ -23,6 +23,7 @@
 
 #include <av2_obu/core/av2_types.h>
 #include <av2_obu/core/base_obu.h>
+#include <av2_obu/core/temporal_unit.h>
 
 using json = nlohmann::ordered_json;
 
@@ -38,6 +39,26 @@ public:
 
   // Get all parsed OBUs
   const std::vector<std::unique_ptr<BaseOBU>>& obus() const { return obus_; }
+
+  // Temporal unit access
+  const std::vector<TemporalUnit>& temporal_units() const { return temporal_units_; }
+  size_t temporal_unit_count() const { return temporal_units_.size(); }
+  const TemporalUnit& temporal_unit(size_t index) const { return temporal_units_[index]; }
+
+  // Configure temporal unit detection
+  struct TemporalUnitOptions {
+    enum class Mode {
+      kAuto,
+      kTemporalDelimiter,
+      kOrderHint,
+      kFrameHeuristic
+    };
+    Mode mode = Mode::kAuto;
+    bool include_temporal_delimiters = true;
+  };
+
+  void set_temporal_unit_options(const TemporalUnitOptions& opts) { tu_options_ = opts; }
+  const TemporalUnitOptions& temporal_unit_options() const { return tu_options_; }
 
   // Export all OBUs to JSON
   json to_json() const;
@@ -111,8 +132,15 @@ private:
   // Returns number of bytes read (0 on error)
   uint32_t read_annex_b_size(std::ifstream& ifs, uint32_t& value);
 
+  void build_temporal_units();
+  void build_tus_td_based();
+  void build_tus_frame_based();
+  bool is_config_obu(const BaseOBU* obu) const;
+
   std::string current_file_;
   std::vector<std::unique_ptr<BaseOBU>> obus_;
+  std::vector<TemporalUnit> temporal_units_;
+  TemporalUnitOptions tu_options_;
 };
 
 }  // namespace av2_obu
