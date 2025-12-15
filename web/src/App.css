@@ -149,7 +149,7 @@ body {
 .results-container {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 200px);
+  margin-bottom: 24px;
 }
 
 .results-header {
