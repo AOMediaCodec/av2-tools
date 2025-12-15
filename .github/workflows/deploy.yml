@@ -74,7 +74,7 @@ jobs:
 
       - name: Install frontend dependencies
         working-directory: web
-        run: npm ci
+        run: npm install --frozen-lockfile
 
       - name: Build frontend
         working-directory: web
