@@ -45,8 +45,8 @@ const char* av2_parse_to_json(const uint8_t* data, size_t size) {
   }
 
   try {
-    // Write data to temporary file (OBUParser currently expects file input)
-    // TODO: Future optimization - add parse_from_memory() to OBUParser
+    // Write data to temporary file in Emscripten's virtual filesystem
+    // The temp file approach works fine for browser use cases
     const char* temp_path = "/tmp/av2_wasm_temp.bin";
     std::ofstream ofs(temp_path, std::ios::binary);
     if (!ofs) {
