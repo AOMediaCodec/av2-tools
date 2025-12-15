@@ -1,0 +1,114 @@
+.json-tree-viewer {
+  font-family: 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #333;
+}
+
+.json-node {
+  margin: 2px 0;
+}
+
+.json-expandable {
+  cursor: pointer;
+  user-select: none;
+  padding: 2px 0;
+  border-radius: 3px;
+  transition: background-color 0.15s;
+}
+
+.json-expandable:hover {
+  background-color: #f0f0f0;
+}
+
+.json-toggle {
+  display: inline-block;
+  width: 16px;
+  font-size: 10px;
+  color: #999;
+  margin-right: 4px;
+}
+
+.json-key {
+  color: #881391;
+  font-weight: 500;
+  margin-right: 4px;
+}
+
+.json-key::after {
+  content: '';
+}
+
+.json-bracket {
+  color: #666;
+  margin: 0 2px;
+}
+
+.json-bracket-close {
+  color: #666;
+  margin-top: 2px;
+}
+
+.json-preview {
+  color: #999;
+  font-style: italic;
+  margin: 0 8px;
+  font-size: 12px;
+}
+
+/* Value types */
+.json-value-string {
+  color: #c41a16;
+}
+
+.json-value-number {
+  color: #1c00cf;
+}
+
+.json-value-boolean {
+  color: #0d22aa;
+  font-weight: 600;
+}
+
+.json-value-null {
+  color: #808080;
+  font-style: italic;
+}
+
+/* Empty structures */
+.json-object-empty,
+.json-array-empty {
+  color: #999;
+}
+
+/* Depth indicators */
+.json-node[style*='padding-left'] {
+  position: relative;
+}
+
+/* Syntax highlighting for different depths */
+.json-object > .json-node,
+.json-array > .json-node {
+  border-left: 1px solid #e8e8e8;
+  margin-left: 8px;
+}
+
+/* Hover effect for clickable items */
+.json-expandable {
+  position: relative;
+}
+
+.json-expandable::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: transparent;
+  transition: background-color 0.15s;
+}
+
+.json-expandable:hover::before {
+  background-color: #4a90e2;
+}

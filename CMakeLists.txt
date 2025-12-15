@@ -198,3 +198,12 @@ option(BUILD_EXAMPLES "Build examples" OFF)
 if(BUILD_EXAMPLES)
   add_subdirectory(examples)
 endif()
+
+# ---- WebAssembly target ----
+option(BUILD_WASM "Build WebAssembly target (requires Emscripten)" OFF)
+if(BUILD_WASM)
+  if(NOT EMSCRIPTEN)
+    message(FATAL_ERROR "BUILD_WASM requires Emscripten. Use: emcmake cmake -DBUILD_WASM=ON ...")
+  endif()
+  add_subdirectory(src/wasm)
+endif()

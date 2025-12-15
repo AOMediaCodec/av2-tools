@@ -9,6 +9,7 @@ Thumbs.db
 
 # CMake build trees (anywhere)
 **/build/
+**/build-wasm/
 **/mybuild/
 **/cmake-build-*/
 CMakeFiles/
@@ -53,8 +54,21 @@ Testing/
 *.obu
 *.ivf
 
-# Coverage & profiling 
+# Coverage & profiling
 *.gcda
 *.gcno
 *.profraw
 *.profdata
+
+# Web frontend
+web/node_modules/
+web/dist/
+web/.vite/
+web/package-lock.json
+web/.eslintcache
+
+# WASM artifacts (generated during build)
+*.wasm
+src/wasm/*.js
+web/public/wasm/*.wasm
+web/public/wasm/*.js
