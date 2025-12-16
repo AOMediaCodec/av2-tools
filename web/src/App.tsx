@@ -44,6 +44,8 @@ function App() {
 
     try {
       const result = await parseAV2Bitstream(data);
+      // Replace the temp filename with the actual filename
+      result.file = filename;
       setState({ status: 'parsed', result });
     } catch (error) {
       setState({
