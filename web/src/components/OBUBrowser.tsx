@@ -7,6 +7,73 @@ interface OBUBrowserProps {
   obus: any[];
 }
 
+// Metadata unit header fields (fields present even when payload is not parsed)
+const METADATA_UNIT_HEADER_FIELDS = new Set([
+  'metadata_type',
+  'metadata_type_name',
+  'muh_header_size',
+  'muh_cancel_flag',
+  'muh_payload_size',
+  'muh_layer_idc',
+  'muh_persistence_idc',
+  'muh_priority',
+  'muh_xlayer_map',
+  'muh_mlayer_maps',
+  'muh_header_extension_bytes',
+  'muh_reserved_zero_2bits'
+]);
+
+// Check if metadata unit has parsed payload (has fields beyond header)
+function hasMetadataPayload(metadataUnit: any): boolean {
+  return Object.keys(metadataUnit).some(k => !METADATA_UNIT_HEADER_FIELDS.has(k));
+}
+
+// Check if metadata type is known but not yet implemented
+// Skip warning for UNKNOWN/RESERVED types since we'll never parse them
+function isKnownButNotImplemented(metadataUnit: any): boolean {
+  const typeName = metadataUnit.metadata_type_name;
+  const isUnknownOrReserved = typeName.includes('UNKNOWN') || typeName.includes('RESERVED');
+  return !isUnknownOrReserved && !hasMetadataPayload(metadataUnit);
+}
+
+// Render metadata unit with "not parsed" message if needed
+function MetadataUnitViewer({ unit, label }: { unit: any; label?: string }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const showNotImplementedWarning = isKnownButNotImplemented(unit);
+
+  return (
+    <div className="metadata-unit-viewer">
+      {label && (
+        <div className="metadata-unit-header" onClick={() => setIsExpanded(!isExpanded)}>
+          <span className="expand-icon">{isExpanded ? '▼' : '▶'}</span>
+          <h5>{label}</h5>
+          <span className="metadata-type-badge">{unit.metadata_type_name}</span>
+        </div>
+      )}
+      {isExpanded && (
+        <>
+          <div className="syntax-tree">
+            <JsonHybridViewer data={unit} defaultExpanded={true} />
+          </div>
+          {showNotImplementedWarning && (
+            <div className="payload-not-parsed metadata-not-parsed">
+              <span className="not-parsed-icon">⚠️</span>
+              <span className="not-parsed-text">
+                Metadata payload parsing not yet implemented for {unit.metadata_type_name}
+              </span>
+              {unit.muh_payload_size > 0 && (
+                <div className="not-parsed-details">
+                  Payload size: {unit.muh_payload_size} bytes
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export function OBUBrowser({ obus }: OBUBrowserProps) {
   const [expandedIndices, setExpandedIndices] = useState<Set<number>>(new Set());
   const [isSpotlightOpen, setIsSpotlightOpen] = useState(false);
@@ -187,14 +254,40 @@ export function OBUBrowser({ obus }: OBUBrowserProps) {
                       (k) => k !== 'type_name' && k !== 'position' && k !== 'header'
                     ) ? (
                       <div className="syntax-tree">
-                        <JsonHybridViewer
-                          data={Object.fromEntries(
-                            Object.entries(obu).filter(
-                              ([k]) => k !== 'type_name' && k !== 'position' && k !== 'header'
-                            )
-                          )}
-                          defaultExpanded={true}
-                        />
+                        {/* Special handling for metadata OBUs with metadata_unit field */}
+                        {obu.metadata_unit ? (
+                          <MetadataUnitViewer unit={obu.metadata_unit} label="Metadata Unit" />
+                        ) : obu.units ? (
+                          /* MetadataGroupOBU with multiple units */
+                          <div>
+                            <div className="metadata-group-info">
+                              <JsonHybridViewer
+                                data={Object.fromEntries(
+                                  Object.entries(obu).filter(
+                                    ([k]) => k !== 'type_name' && k !== 'position' && k !== 'header' && k !== 'units'
+                                  )
+                                )}
+                                defaultExpanded={true}
+                              />
+                            </div>
+                            <div className="metadata-units-list">
+                              <h5>Metadata Units ({obu.units.length})</h5>
+                              {obu.units.map((unit: any, idx: number) => (
+                                <MetadataUnitViewer key={idx} unit={unit} label={`Unit ${idx}`} />
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          /* Regular OBU payload */
+                          <JsonHybridViewer
+                            data={Object.fromEntries(
+                              Object.entries(obu).filter(
+                                ([k]) => k !== 'type_name' && k !== 'position' && k !== 'header'
+                              )
+                            )}
+                            defaultExpanded={true}
+                          />
+                        )}
                       </div>
                     ) : (
                       <div className="payload-not-parsed">

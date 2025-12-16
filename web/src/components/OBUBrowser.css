@@ -290,3 +290,81 @@
 .obu-item.highlight-flash {
   animation: highlightFlash 2s ease-out;
 }
+
+/* Metadata Unit Viewer Styles */
+.metadata-unit-viewer {
+  margin-bottom: 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  background: #fafafa;
+}
+
+.metadata-unit-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s;
+  border-radius: 4px 4px 0 0;
+}
+
+.metadata-unit-header:hover {
+  background: #f0f0f0;
+}
+
+.metadata-unit-header .expand-icon {
+  font-size: 10px;
+  color: #666;
+  flex-shrink: 0;
+}
+
+.metadata-unit-header h5 {
+  margin: 0;
+  font-size: 13px;
+  color: #666;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+.metadata-type-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  background: #e3f2fd;
+  color: #1976d2;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: 'Monaco', 'Courier New', monospace;
+}
+
+.metadata-unit-viewer .syntax-tree {
+  padding: 12px;
+  background: white;
+}
+
+.metadata-not-parsed {
+  margin: 0 12px 12px 12px;
+}
+
+.metadata-units-list {
+  margin-top: 16px;
+}
+
+.metadata-units-list > h5 {
+  margin: 0 0 12px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e0e0e0;
+  font-size: 14px;
+  color: #333;
+  font-weight: 600;
+}
+
+.metadata-group-info {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e0e0e0;
+}
