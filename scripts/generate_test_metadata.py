@@ -191,15 +191,66 @@ def metadata_itut_t35(country_code=0xB5, payload=b"Test T.35 payload"):
 
 
 def metadata_banding_hints(coding_present=True, source_present=False,
-                           skip_byte_alignment=False):
-    """Create metadata_banding_hints() (simplified). Naturally non-byte-aligned (2-3 bits)."""
+                           hints_flag=False, three_components=False,
+                           with_band_units=False, skip_byte_alignment=False):
+    """Create metadata_banding_hints().
+
+    Args:
+        coding_present: coding_banding_present_flag
+        source_present: source_banding_present_flag
+        hints_flag: banding_hints_flag (enables full structure)
+        three_components: three_color_components (1=3 components, 0=1 component)
+        with_band_units: Include band_units_information (2x3 grid with varying sizes)
+        skip_byte_alignment: Skip byte alignment (for testing)
+    """
     bw = BitWriter()
 
     bw.write_f(1, 1 if coding_present else 0)
     bw.write_f(1, 1 if source_present else 0)
 
     if coding_present:
-        bw.write_f(1, 0)  # banding_hints_flag
+        bw.write_f(1, 1 if hints_flag else 0)
+
+        if hints_flag:
+            bw.write_f(1, 1 if three_components else 0)
+            num_components = 3 if three_components else 1
+
+            # Component info
+            for i in range(num_components):
+                if i < 2:  # First two components have banding info
+                    bw.write_f(1, 1)  # banding_in_component_present_flag
+                    bw.write_f(6, 10 + i * 2)  # max_band_width_minus4
+                    bw.write_f(4, 5 + i * 2)   # max_band_step_minus1
+                else:
+                    bw.write_f(1, 0)  # banding_in_component_present_flag
+
+            # Band units information
+            bw.write_f(1, 1 if with_band_units else 0)
+
+            if with_band_units:
+                bw.write_f(5, 1)  # num_band_units_rows_minus_1 = 1 (2 rows)
+                bw.write_f(5, 2)  # num_band_units_cols_minus_1 = 2 (3 cols)
+                bw.write_f(1, 1)  # varying_size_band_units_flag
+
+                # Varying size info
+                bw.write_f(3, 3)  # band_block_in_luma_samples
+
+                # Vertical sizes (2 rows)
+                bw.write_f(5, 8)   # vert_size[0]
+                bw.write_f(5, 10)  # vert_size[1]
+
+                # Horizontal sizes (3 cols)
+                bw.write_f(5, 6)   # horz_size[0]
+                bw.write_f(5, 7)   # horz_size[1]
+                bw.write_f(5, 9)   # horz_size[2]
+
+                # Banding flags for 2x3 grid
+                bw.write_f(1, 1)  # [0][0]
+                bw.write_f(1, 0)  # [0][1]
+                bw.write_f(1, 1)  # [0][2]
+                bw.write_f(1, 0)  # [1][0]
+                bw.write_f(1, 1)  # [1][1]
+                bw.write_f(1, 0)  # [1][2]
 
     bits_before = bw.bit_count()
     if not skip_byte_alignment:
@@ -370,7 +421,10 @@ def generate_all_metadata_types(skip_byte_alignment=False):
         METADATA_TYPE_ICC_PROFILE: lambda: metadata_icc_profile(),
         METADATA_TYPE_SCAN_TYPE: lambda: metadata_scan_type(),
         METADATA_TYPE_TIMECODE: lambda: metadata_timecode(skip_byte_alignment=skip_byte_alignment),
-        METADATA_TYPE_BANDING_HINTS: lambda: metadata_banding_hints(skip_byte_alignment=skip_byte_alignment),
+        METADATA_TYPE_BANDING_HINTS: lambda: metadata_banding_hints(
+            hints_flag=True, three_components=True, with_band_units=True,
+            skip_byte_alignment=skip_byte_alignment
+        ),
         METADATA_TYPE_TEMPORAL_POINT_INFO: lambda: metadata_temporal_point_info(skip_byte_alignment=skip_byte_alignment),
     }
 
