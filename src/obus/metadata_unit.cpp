@@ -140,7 +140,22 @@ bool MetadataUnit::parse_payload(BitstreamReader& br) {
       break;
 
     case MetadataType::HDR_MDCV:
-      spdlog::debug("    TODO: Parse HDR_MDCV metadata");
+      spdlog::debug("    Parsing HDR_MDCV metadata");
+      for (int i = 0; i < 3; i++) {
+        primary_chromaticity_x_[i] = static_cast<uint16_t>(br.read_bits(16));
+        primary_chromaticity_y_[i] = static_cast<uint16_t>(br.read_bits(16));
+      }
+      white_point_chromaticity_x_ = static_cast<uint16_t>(br.read_bits(16));
+      white_point_chromaticity_y_ = static_cast<uint16_t>(br.read_bits(16));
+      luminance_max_ = static_cast<uint32_t>(br.read_bits(32));
+      luminance_min_ = static_cast<uint32_t>(br.read_bits(32));
+
+      spdlog::debug("      primary_chromaticity (G): ({}, {})", primary_chromaticity_x_[0], primary_chromaticity_y_[0]);
+      spdlog::debug("      primary_chromaticity (B): ({}, {})", primary_chromaticity_x_[1], primary_chromaticity_y_[1]);
+      spdlog::debug("      primary_chromaticity (R): ({}, {})", primary_chromaticity_x_[2], primary_chromaticity_y_[2]);
+      spdlog::debug("      white_point_chromaticity: ({}, {})", white_point_chromaticity_x_, white_point_chromaticity_y_);
+      spdlog::debug("      luminance_max: {}", luminance_max_);
+      spdlog::debug("      luminance_min: {}", luminance_min_);
       break;
 
     case MetadataType::SCALABILITY:
@@ -325,6 +340,13 @@ void MetadataUnit::dump() const {
     if (type == MetadataType::HDR_CLL) {
       spdlog::debug("      max_cll: {}", max_cll_);
       spdlog::debug("      max_fall: {}", max_fall_);
+    } else if (type == MetadataType::HDR_MDCV) {
+      spdlog::debug("      primary_chromaticity (G): ({}, {})", primary_chromaticity_x_[0], primary_chromaticity_y_[0]);
+      spdlog::debug("      primary_chromaticity (B): ({}, {})", primary_chromaticity_x_[1], primary_chromaticity_y_[1]);
+      spdlog::debug("      primary_chromaticity (R): ({}, {})", primary_chromaticity_x_[2], primary_chromaticity_y_[2]);
+      spdlog::debug("      white_point_chromaticity: ({}, {})", white_point_chromaticity_x_, white_point_chromaticity_y_);
+      spdlog::debug("      luminance_max: {}", luminance_max_);
+      spdlog::debug("      luminance_min: {}", luminance_min_);
     } else if (type == MetadataType::TIMECODE) {
       spdlog::debug("      counting_type: {}", int(counting_type_));
       spdlog::debug("      full_timestamp_flag: {}", int(full_timestamp_flag_));
@@ -391,6 +413,22 @@ nlohmann::ordered_json MetadataUnit::to_json() const {
     if (type == MetadataType::HDR_CLL) {
       j["max_cll"] = max_cll_;
       j["max_fall"] = max_fall_;
+    } else if (type == MetadataType::HDR_MDCV) {
+      // Create arrays for primary chromaticities
+      nlohmann::json primaries = nlohmann::json::array();
+      for (int i = 0; i < 3; i++) {
+        primaries.push_back({
+          {"x", primary_chromaticity_x_[i]},
+          {"y", primary_chromaticity_y_[i]}
+        });
+      }
+      j["primary_chromaticities"] = primaries;
+      j["white_point"] = {
+        {"x", white_point_chromaticity_x_},
+        {"y", white_point_chromaticity_y_}
+      };
+      j["luminance_max"] = luminance_max_;
+      j["luminance_min"] = luminance_min_;
     } else if (type == MetadataType::TIMECODE) {
       j["counting_type"] = counting_type_;
       j["full_timestamp_flag"] = full_timestamp_flag_;

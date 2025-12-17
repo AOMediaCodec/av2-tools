@@ -68,6 +68,14 @@ private:
   uint16_t max_cll_ = 0;
   uint16_t max_fall_ = 0;
 
+  // HDR_MDCV (Mastering Display Color Volume)
+  std::array<uint16_t, 3> primary_chromaticity_x_ = {0, 0, 0};
+  std::array<uint16_t, 3> primary_chromaticity_y_ = {0, 0, 0};
+  uint16_t white_point_chromaticity_x_ = 0;
+  uint16_t white_point_chromaticity_y_ = 0;
+  uint32_t luminance_max_ = 0;
+  uint32_t luminance_min_ = 0;
+
   // TIMECODE
   uint8_t counting_type_ = 0;
   uint8_t full_timestamp_flag_ = 0;
