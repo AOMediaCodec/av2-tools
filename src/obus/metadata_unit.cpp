@@ -262,11 +262,31 @@ bool MetadataUnit::parse_payload(BitstreamReader& br) {
       break;
 
     case MetadataType::ICC_PROFILE:
-      spdlog::debug("    TODO: Parse ICC_PROFILE metadata");
+      spdlog::debug("    Parsing ICC_PROFILE metadata");
+      {
+        // ICC profile is just raw payload bytes
+        // For group OBUs, we know the exact size
+        if (has_payload_size && muh_payload_size_ > 0) {
+          icc_profile_data_payload_bytes_.clear();
+          for (uint32_t i = 0; i < muh_payload_size_; i++) {
+            icc_profile_data_payload_bytes_.push_back(static_cast<uint8_t>(br.read_bits(8)));
+          }
+          spdlog::debug("      icc_profile_data: {} bytes", icc_profile_data_payload_bytes_.size());
+        } else {
+          // Without known payload size, we can't safely read the profile
+          spdlog::debug("      icc_profile_data: (size unknown, not parsed)");
+        }
+      }
       break;
 
     case MetadataType::SCAN_TYPE:
-      spdlog::debug("    TODO: Parse SCAN_TYPE metadata");
+      spdlog::debug("    Parsing SCAN_TYPE metadata");
+      mps_pic_struct_type_ = static_cast<uint8_t>(br.read_bits(5));
+      mps_source_scan_type_idc_ = static_cast<uint8_t>(br.read_bits(2));
+      mps_duplicate_flag_ = static_cast<uint8_t>(br.read_bits(1));
+      spdlog::debug("      mps_pic_struct_type: {}", int(mps_pic_struct_type_));
+      spdlog::debug("      mps_source_scan_type_idc: {}", int(mps_source_scan_type_idc_));
+      spdlog::debug("      mps_duplicate_flag: {}", int(mps_duplicate_flag_));
       break;
 
     case MetadataType::HASH:
@@ -316,6 +336,17 @@ bool MetadataUnit::parse_payload(BitstreamReader& br) {
                         hash_label, i, hash[0], hash[1], hash[2], hash[3], hash[4], hash[5], hash[6], hash[7],
                         hash[8], hash[9], hash[10], hash[11], hash[12], hash[13], hash[14], hash[15]);
         }
+      }
+      break;
+
+    case MetadataType::TEMPORAL_POINT_INFO:
+      spdlog::debug("    Parsing TEMPORAL_POINT_INFO metadata");
+      frame_presentation_time_length_minus_1_ = static_cast<uint8_t>(br.read_bits(5));
+      {
+        uint32_t n = frame_presentation_time_length_minus_1_ + 1;
+        frame_presentation_time_ = static_cast<uint32_t>(br.read_bits(n));
+        spdlog::debug("      frame_presentation_time_length_minus_1: {}", int(frame_presentation_time_length_minus_1_));
+        spdlog::debug("      frame_presentation_time: {} ({} bits)", frame_presentation_time_, n);
       }
       break;
 
@@ -431,6 +462,17 @@ void MetadataUnit::dump() const {
                       hash_label, i, hash[0], hash[1], hash[2], hash[3], hash[4], hash[5], hash[6], hash[7],
                       hash[8], hash[9], hash[10], hash[11], hash[12], hash[13], hash[14], hash[15]);
       }
+    } else if (type == MetadataType::ICC_PROFILE) {
+      if (!icc_profile_data_payload_bytes_.empty()) {
+        spdlog::debug("      icc_profile_data: {} bytes", icc_profile_data_payload_bytes_.size());
+      }
+    } else if (type == MetadataType::SCAN_TYPE) {
+      spdlog::debug("      mps_pic_struct_type: {}", int(mps_pic_struct_type_));
+      spdlog::debug("      mps_source_scan_type_idc: {}", int(mps_source_scan_type_idc_));
+      spdlog::debug("      mps_duplicate_flag: {}", int(mps_duplicate_flag_));
+    } else if (type == MetadataType::TEMPORAL_POINT_INFO) {
+      spdlog::debug("      frame_presentation_time_length_minus_1: {}", int(frame_presentation_time_length_minus_1_));
+      spdlog::debug("      frame_presentation_time: {}", frame_presentation_time_);
     }
   }
 
@@ -567,6 +609,34 @@ nlohmann::ordered_json MetadataUnit::to_json() const {
           j["frame_hash"] = hash_array[0];
         }
       }
+    } else if (type == MetadataType::ICC_PROFILE) {
+      if (!icc_profile_data_payload_bytes_.empty()) {
+        // ICC profiles are typically large (KB range) and not meant for human inspection
+        // Show minimal preview (16 bytes = 32 hex chars)
+        const size_t MAX_PREVIEW_BYTES = 16;
+        std::string hex_profile;
+        char buf[3];
+
+        size_t bytes_to_show = std::min(icc_profile_data_payload_bytes_.size(), MAX_PREVIEW_BYTES);
+        for (size_t i = 0; i < bytes_to_show; i++) {
+          snprintf(buf, sizeof(buf), "%02x", icc_profile_data_payload_bytes_[i]);
+          hex_profile += buf;
+        }
+
+        if (icc_profile_data_payload_bytes_.size() > MAX_PREVIEW_BYTES) {
+          hex_profile += "... (truncated)";
+        }
+
+        j["icc_profile_data_payload_bytes"] = hex_profile;
+        j["icc_profile_size"] = icc_profile_data_payload_bytes_.size();
+      }
+    } else if (type == MetadataType::SCAN_TYPE) {
+      j["mps_pic_struct_type"] = mps_pic_struct_type_;
+      j["mps_source_scan_type_idc"] = mps_source_scan_type_idc_;
+      j["mps_duplicate_flag"] = mps_duplicate_flag_;
+    } else if (type == MetadataType::TEMPORAL_POINT_INFO) {
+      j["frame_presentation_time_length_minus_1"] = frame_presentation_time_length_minus_1_;
+      j["frame_presentation_time"] = frame_presentation_time_;
     }
   }
 

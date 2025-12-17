@@ -103,6 +103,18 @@ private:
   uint8_t has_grain_ = 0;
   uint8_t hash_reserved_ = 0;
   std::vector<std::array<uint8_t, 16>> hashes_;  // Each hash is 16 bytes (frame_hash or plane_hash)
+
+  // ICC_PROFILE
+  std::vector<uint8_t> icc_profile_data_payload_bytes_;
+
+  // SCAN_TYPE
+  uint8_t mps_pic_struct_type_ = 0;
+  uint8_t mps_source_scan_type_idc_ = 0;
+  uint8_t mps_duplicate_flag_ = 0;
+
+  // TEMPORAL_POINT_INFO
+  uint8_t frame_presentation_time_length_minus_1_ = 0;
+  uint32_t frame_presentation_time_ = 0;
 };
 
 }  // namespace av2_obu

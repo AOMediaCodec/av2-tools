@@ -72,6 +72,7 @@ enum class MetadataType : uint32_t {
   BANDING_HINTS = 7,
   ICC_PROFILE = 8,
   SCAN_TYPE = 9,
+  TEMPORAL_POINT_INFO = 10,
   UNKNOWN_METADATA = 999  // For invalid/unknown metadata types
 };
 
