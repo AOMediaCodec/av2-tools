@@ -115,6 +115,27 @@ private:
   // TEMPORAL_POINT_INFO
   uint8_t frame_presentation_time_length_minus_1_ = 0;
   uint32_t frame_presentation_time_ = 0;
+
+  // BANDING_HINTS
+  struct BandingComponentInfo {
+    uint8_t banding_in_component_present_flag = 0;
+    uint8_t max_band_width_minus4 = 0;
+    uint8_t max_band_step_minus1 = 0;
+  };
+
+  uint8_t coding_banding_present_flag_ = 0;
+  uint8_t source_banding_present_flag_ = 0;
+  uint8_t banding_hints_flag_ = 0;
+  uint8_t three_color_components_ = 0;
+  std::vector<BandingComponentInfo> banding_components_;
+  uint8_t band_units_information_present_flag_ = 0;
+  uint8_t num_band_units_rows_minus_1_ = 0;
+  uint8_t num_band_units_cols_minus_1_ = 0;
+  uint8_t varying_size_band_units_flag_ = 0;
+  uint8_t band_block_in_luma_samples_ = 0;
+  std::vector<uint8_t> vert_size_in_band_blocks_minus1_;
+  std::vector<uint8_t> horz_size_in_band_blocks_minus1_;
+  std::vector<std::vector<uint8_t>> banding_in_band_unit_present_flags_;  // 2D array [rows][cols]
 };
 
 }  // namespace av2_obu
