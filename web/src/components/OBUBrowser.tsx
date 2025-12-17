@@ -39,7 +39,13 @@ function isKnownButNotImplemented(metadataUnit: any): boolean {
 // Render metadata unit with "not parsed" message if needed
 function MetadataUnitViewer({ unit, label }: { unit: any; label?: string }) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const hasParsedPayload = hasMetadataPayload(unit);
   const showNotImplementedWarning = isKnownButNotImplemented(unit);
+
+  // Determine badge class based on implementation status
+  const badgeClass = hasParsedPayload
+    ? 'metadata-type-badge-implemented'
+    : 'metadata-type-badge-not-implemented';
 
   return (
     <div className="metadata-unit-viewer">
@@ -47,7 +53,7 @@ function MetadataUnitViewer({ unit, label }: { unit: any; label?: string }) {
         <div className="metadata-unit-header" onClick={() => setIsExpanded(!isExpanded)}>
           <span className="expand-icon">{isExpanded ? '▼' : '▶'}</span>
           <h5>{label}</h5>
-          <span className="metadata-type-badge">{unit.metadata_type_name}</span>
+          <span className={`metadata-type-badge ${badgeClass}`}>{unit.metadata_type_name}</span>
         </div>
       )}
       {isExpanded && (
