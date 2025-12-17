@@ -76,6 +76,12 @@ private:
   uint32_t luminance_max_ = 0;
   uint32_t luminance_min_ = 0;
 
+  // ITUT_T35
+  uint8_t itu_t_t35_country_code_ = 0;
+  uint8_t itu_t_t35_country_code_extension_byte_ = 0;
+  uint16_t itu_t_t35_terminal_provider_code_ = 0;  // For USA/Canada
+  std::vector<uint8_t> itu_t_t35_payload_bytes_;
+
   // TIMECODE
   uint8_t counting_type_ = 0;
   uint8_t full_timestamp_flag_ = 0;

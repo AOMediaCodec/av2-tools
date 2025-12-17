@@ -163,7 +163,48 @@ bool MetadataUnit::parse_payload(BitstreamReader& br) {
       break;
 
     case MetadataType::ITUT_T35:
-      spdlog::debug("    TODO: Parse ITUT_T35 metadata");
+      spdlog::debug("    Parsing ITUT_T35 metadata");
+      {
+        itu_t_t35_country_code_ = static_cast<uint8_t>(br.read_bits(8));
+        spdlog::debug("      itu_t_t35_country_code: 0x{:02x}", itu_t_t35_country_code_);
+
+        uint32_t payload_bytes_remaining = 0;
+        if (has_payload_size && muh_payload_size_ > 0) {
+          payload_bytes_remaining = muh_payload_size_ - 1;  // Minus country_code byte
+        }
+
+        if (itu_t_t35_country_code_ == 0xFF) {
+          itu_t_t35_country_code_extension_byte_ = static_cast<uint8_t>(br.read_bits(8));
+          spdlog::debug("      itu_t_t35_country_code_extension_byte: 0x{:02x}",
+                        itu_t_t35_country_code_extension_byte_);
+          if (payload_bytes_remaining > 0) {
+            payload_bytes_remaining--;
+          }
+        }
+
+        // For USA (0xB5) and Canada (0x20), parse terminal_provider_code
+        if ((itu_t_t35_country_code_ == 0xB5 || itu_t_t35_country_code_ == 0x20) &&
+            payload_bytes_remaining >= 2) {
+          uint8_t provider_high = static_cast<uint8_t>(br.read_bits(8));
+          uint8_t provider_low = static_cast<uint8_t>(br.read_bits(8));
+          itu_t_t35_terminal_provider_code_ = (static_cast<uint16_t>(provider_high) << 8) | provider_low;
+          spdlog::debug("      itu_t_t35_terminal_provider_code: 0x{:04x}",
+                        itu_t_t35_terminal_provider_code_);
+          payload_bytes_remaining -= 2;
+        }
+
+        // Read remaining payload bytes
+        if (has_payload_size && payload_bytes_remaining > 0) {
+          itu_t_t35_payload_bytes_.clear();
+          for (uint32_t i = 0; i < payload_bytes_remaining; i++) {
+            itu_t_t35_payload_bytes_.push_back(static_cast<uint8_t>(br.read_bits(8)));
+          }
+          spdlog::debug("      itu_t_t35_payload_bytes: {} bytes", itu_t_t35_payload_bytes_.size());
+        } else if (!has_payload_size) {
+          // Without known payload size, we can't safely read the rest
+          spdlog::debug("      itu_t_t35_payload_bytes: (size unknown, not parsed)");
+        }
+      }
       break;
 
     case MetadataType::TIMECODE:
@@ -347,6 +388,19 @@ void MetadataUnit::dump() const {
       spdlog::debug("      white_point_chromaticity: ({}, {})", white_point_chromaticity_x_, white_point_chromaticity_y_);
       spdlog::debug("      luminance_max: {}", luminance_max_);
       spdlog::debug("      luminance_min: {}", luminance_min_);
+    } else if (type == MetadataType::ITUT_T35) {
+      spdlog::debug("      itu_t_t35_country_code: 0x{:02x}", itu_t_t35_country_code_);
+      if (itu_t_t35_country_code_ == 0xFF) {
+        spdlog::debug("      itu_t_t35_country_code_extension_byte: 0x{:02x}",
+                      itu_t_t35_country_code_extension_byte_);
+      }
+      if (itu_t_t35_terminal_provider_code_ != 0) {
+        spdlog::debug("      itu_t_t35_terminal_provider_code: 0x{:04x}",
+                      itu_t_t35_terminal_provider_code_);
+      }
+      if (!itu_t_t35_payload_bytes_.empty()) {
+        spdlog::debug("      itu_t_t35_payload_bytes: {} bytes", itu_t_t35_payload_bytes_.size());
+      }
     } else if (type == MetadataType::TIMECODE) {
       spdlog::debug("      counting_type: {}", int(counting_type_));
       spdlog::debug("      full_timestamp_flag: {}", int(full_timestamp_flag_));
@@ -429,6 +483,34 @@ nlohmann::ordered_json MetadataUnit::to_json() const {
       };
       j["luminance_max"] = luminance_max_;
       j["luminance_min"] = luminance_min_;
+    } else if (type == MetadataType::ITUT_T35) {
+      j["itu_t_t35_country_code"] = itu_t_t35_country_code_;
+      if (itu_t_t35_country_code_ == 0xFF) {
+        j["itu_t_t35_country_code_extension_byte"] = itu_t_t35_country_code_extension_byte_;
+      }
+      if (itu_t_t35_terminal_provider_code_ != 0) {
+        j["itu_t_t35_terminal_provider_code"] = itu_t_t35_terminal_provider_code_;
+      }
+      if (!itu_t_t35_payload_bytes_.empty()) {
+        // Format payload as hex string for readability
+        // Truncate large payloads to keep JSON manageable
+        const size_t MAX_PREVIEW_BYTES = 64;
+        std::string hex_payload;
+        char buf[3];
+
+        size_t bytes_to_show = std::min(itu_t_t35_payload_bytes_.size(), MAX_PREVIEW_BYTES);
+        for (size_t i = 0; i < bytes_to_show; i++) {
+          snprintf(buf, sizeof(buf), "%02x", itu_t_t35_payload_bytes_[i]);
+          hex_payload += buf;
+        }
+
+        if (itu_t_t35_payload_bytes_.size() > MAX_PREVIEW_BYTES) {
+          hex_payload += "... (truncated)";
+        }
+
+        j["itu_t_t35_payload_bytes"] = hex_payload;
+        j["itu_t_t35_payload_size"] = itu_t_t35_payload_bytes_.size();
+      }
     } else if (type == MetadataType::TIMECODE) {
       j["counting_type"] = counting_type_;
       j["full_timestamp_flag"] = full_timestamp_flag_;
