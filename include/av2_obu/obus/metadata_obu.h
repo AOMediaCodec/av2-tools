@@ -17,13 +17,13 @@
 
 namespace av2_obu {
 
-// Metadata OBU that contains single metadata unit
+// Metadata OBU (short format) that contains single metadata unit
 class MetadataOBU : public BaseOBU {
 public:
   explicit MetadataOBU(const OBUPosition& pos) : BaseOBU(pos) {}
 
   json to_json() const override;
-  std::string type_name() const override { return "OBU_METADATA"; }
+  std::string type_name() const override { return "OBU_METADATA_SHORT"; }
 
   // Accessors
   uint8_t get_is_suffix() const { return metadata_is_suffix_; }
