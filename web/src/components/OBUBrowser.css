@@ -146,10 +146,14 @@
   color: #2e7d32;
 }
 
-.obu-type.type-obu_metadata,
-.obu-type.type-metadata_group {
-  background: #fff3e0;
-  color: #ef6c00;
+.obu-type.type-obu_metadata_short {
+  background: #fff8e1;
+  color: #f57c00;
+}
+
+.obu-type.type-obu_metadata_group {
+  background: #ffe0b2;
+  color: #e65100;
 }
 
 .obu-type.type-temporal_delimiter {
