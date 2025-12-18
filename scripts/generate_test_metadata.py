@@ -12,88 +12,24 @@ import argparse
 import os
 import sys
 
-OBU_METADATA_SHORT = 8
-OBU_METADATA_GROUP = 9
-
-METADATA_TYPE_HDR_CLL = 1
-METADATA_TYPE_HDR_MDCV = 2
-METADATA_TYPE_SCALABILITY = 3
-METADATA_TYPE_ITUT_T35 = 4
-METADATA_TYPE_TIMECODE = 5
-METADATA_TYPE_DECODED_FRAME_HASH = 6
-METADATA_TYPE_BANDING_HINTS = 7
-METADATA_TYPE_ICC_PROFILE = 8
-METADATA_TYPE_SCAN_TYPE = 9
-METADATA_TYPE_TEMPORAL_POINT_INFO = 10
-
-METADATA_TYPE_NAMES = {
-    METADATA_TYPE_HDR_CLL: "HDR_CLL",
-    METADATA_TYPE_HDR_MDCV: "HDR_MDCV",
-    METADATA_TYPE_SCALABILITY: "SCALABILITY",
-    METADATA_TYPE_ITUT_T35: "ITUT_T35",
-    METADATA_TYPE_TIMECODE: "TIMECODE",
-    METADATA_TYPE_DECODED_FRAME_HASH: "DECODED_FRAME_HASH",
-    METADATA_TYPE_BANDING_HINTS: "BANDING_HINTS",
-    METADATA_TYPE_ICC_PROFILE: "ICC_PROFILE",
-    METADATA_TYPE_SCAN_TYPE: "SCAN_TYPE",
-    METADATA_TYPE_TEMPORAL_POINT_INFO: "TEMPORAL_POINT_INFO",
-}
-
-
-def write_leb128(value):
-    """Encode value as uleb128."""
-    bytes_out = []
-    while True:
-        byte = value & 0x7F
-        value >>= 7
-        if value != 0:
-            byte |= 0x80
-        bytes_out.append(byte)
-        if value == 0:
-            break
-    return bytes(bytes_out)
-
-
-def leb128_size(value):
-    """Return the number of bytes needed to encode value as leb128."""
-    return len(write_leb128(value))
-
-
-class BitWriter:
-    """Helper class to write bits (MSB first)."""
-    def __init__(self):
-        self.bits = []
-
-    def write_bits(self, value, num_bits):
-        for i in range(num_bits - 1, -1, -1):
-            self.bits.append((value >> i) & 1)
-
-    def write_f(self, num_bits, value):
-        """Write fixed-width field f(n)."""
-        self.write_bits(value, num_bits)
-
-    def byte_alignment(self):
-        """Pad with 0s to byte boundary (0x80 trailing_bits added at OBU level)."""
-        bits_to_add = (8 - (len(self.bits) % 8)) % 8
-        if bits_to_add > 0:
-            self.write_bits(0, bits_to_add)
-
-    def bit_count(self):
-        return len(self.bits)
-
-    def to_bytes(self):
-        """Convert bits to bytes, padding to byte boundary if needed."""
-        while len(self.bits) % 8 != 0:
-            self.bits.append(0)
-
-        payload = bytearray()
-        for i in range(0, len(self.bits), 8):
-            byte = 0
-            for j in range(8):
-                byte = (byte << 1) | self.bits[i + j]
-            payload.append(byte)
-
-        return bytes(payload)
+from av2_obu_writer import (
+    BitWriter,
+    OBU_METADATA_SHORT,
+    OBU_METADATA_GROUP,
+    METADATA_TYPE_HDR_CLL,
+    METADATA_TYPE_HDR_MDCV,
+    METADATA_TYPE_ITUT_T35,
+    METADATA_TYPE_TIMECODE,
+    METADATA_TYPE_DECODED_FRAME_HASH,
+    METADATA_TYPE_BANDING_HINTS,
+    METADATA_TYPE_ICC_PROFILE,
+    METADATA_TYPE_SCAN_TYPE,
+    METADATA_TYPE_TEMPORAL_POINT_INFO,
+    METADATA_TYPE_NAMES,
+    leb128_size,
+    create_obu,
+    write_obu_file,
+)
 
 
 # ============================================================================
@@ -160,15 +96,6 @@ def metadata_hdr_mdcv(primaries=None, white_point=None,
     bw.write_f(32, luminance_max)
     bw.write_f(32, luminance_min)
 
-    bits_before = bw.bit_count()
-    bw.byte_alignment()
-    return bw.to_bytes(), bits_before
-
-
-def metadata_scalability(scalability_mode_idc=0):
-    """Create metadata_scalability() (simplified). Always byte-aligned (8 bits minimum)."""
-    bw = BitWriter()
-    bw.write_f(8, scalability_mode_idc)
     bits_before = bw.bit_count()
     bw.byte_alignment()
     return bw.to_bytes(), bits_before
@@ -336,9 +263,11 @@ def metadata_short_obu(metadata_type, payload,
     bw.write_f(1, muh_cancel_flag)
     bw.write_f(3, muh_persistence_idc)
 
-    obu_payload = bytearray(bw.to_bytes())
-    obu_payload.extend(write_leb128(metadata_type))
+    # automatically byte-aligns
+    bw.write_leb128(metadata_type)
 
+    # Convert to bytes and append payload
+    obu_payload = bytearray(bw.to_bytes())
     if not muh_cancel_flag:
         obu_payload.extend(payload)
 
@@ -356,54 +285,32 @@ def metadata_group_obu(metadata_units, metadata_is_suffix=0,
     bw.write_f(2, metadata_necessity_idc)
     bw.write_f(5, metadata_application_id)
 
-    obu_payload = bytearray(bw.to_bytes())
-    obu_payload.extend(write_leb128(len(metadata_units) - 1))
+    bw.write_leb128(len(metadata_units) - 1)
 
     for metadata_type, payload in metadata_units:
-        obu_payload.extend(write_leb128(metadata_type))
+        bw.write_leb128(metadata_type)
 
         payload_size_bytes = leb128_size(len(payload))
         muh_header_size = payload_size_bytes + 2
 
         muh_cancel_flag = 0
         header_byte = (muh_header_size << 1) | muh_cancel_flag
-        obu_payload.append(header_byte)
+        bw.write_f(8, header_byte)
 
         if not muh_cancel_flag:
-            obu_payload.extend(write_leb128(len(payload)))
-            obu_payload.append(0x00)  # layer/persistence/priority
-            obu_payload.append(0x00)  # reserved
-            obu_payload.extend(payload)
+            bw.write_leb128(len(payload))
 
+            bw.write_f(8, 0x00)  # layer/persistence/priority
+            bw.write_f(8, 0x00)  # reserved
+
+            # Append raw payload bytes
+            for byte in payload:
+                bw.write_f(8, byte)
+
+    # Convert to bytes and add trailing_bits
+    obu_payload = bytearray(bw.to_bytes())
     obu_payload.append(0x80)  # trailing_bits
     return bytes(obu_payload)
-
-
-def obu_header(obu_type, obu_tlayer_id=0, obu_extension_flag=0,
-              obu_mlayer_id=0, obu_xlayer_id=0):
-    """Create obu_header(). TLAYER_BITS=2, MLAYER_BITS=3."""
-    bw = BitWriter()
-
-    bw.write_f(1, obu_extension_flag)
-    bw.write_f(5, obu_type)
-    bw.write_f(2, obu_tlayer_id)  # TLAYER_BITS = 2
-
-    if obu_extension_flag == 1:
-        bw.write_f(3, obu_mlayer_id)  # MLAYER_BITS = 3
-        bw.write_f(5, obu_xlayer_id)
-
-    return bw.to_bytes()
-
-
-def create_obu(obu_type, payload, **header_kwargs):
-    """Create complete OBU with leb128 size prefix."""
-    header = obu_header(obu_type, **header_kwargs)
-
-    obu_data = bytearray(header)
-    obu_data.extend(payload)
-
-    size = write_leb128(len(obu_data))
-    return bytes(size) + bytes(obu_data)
 
 
 # ============================================================================
@@ -415,7 +322,6 @@ def generate_all_metadata_types(skip_byte_alignment=False):
     generators = {
         METADATA_TYPE_HDR_CLL: lambda: metadata_hdr_cll(),
         METADATA_TYPE_HDR_MDCV: lambda: metadata_hdr_mdcv(),
-        METADATA_TYPE_SCALABILITY: lambda: metadata_scalability(),
         METADATA_TYPE_ITUT_T35: lambda: metadata_itut_t35(),
         METADATA_TYPE_DECODED_FRAME_HASH: lambda: metadata_decoded_frame_hash(),
         METADATA_TYPE_ICC_PROFILE: lambda: metadata_icc_profile(),
@@ -434,15 +340,6 @@ def generate_all_metadata_types(skip_byte_alignment=False):
         results[mtype] = (payload, bits_before)
 
     return results
-
-
-def write_obu_file(filename, obu_data, description=""):
-    """Write OBU data to file."""
-    with open(filename, 'wb') as f:
-        f.write(obu_data)
-    print(f"✓ {filename}: {len(obu_data)} bytes")
-    if description:
-        print(f"  {description}")
 
 
 # ============================================================================
@@ -477,17 +374,15 @@ Examples:
 
     parser.add_argument('--all', action='store_true',
                        help='Generate all metadata types (both short and group)')
-    parser.add_argument('--type', choices=['cll', 'mdcv', 'scalability',
-                                           't35', 'timecode', 'hash',
-                                           'banding', 'icc',
-                                           'scan', 'temporal'],
+    parser.add_argument('--type', choices=['cll', 'mdcv', 't35', 'timecode', 'hash',
+                                           'banding', 'icc', 'scan', 'temporal'],
                        help='Generate specific metadata type')
     parser.add_argument('--group', type=str,
                        help='Comma-separated list of types for group OBU')
     parser.add_argument('--output', type=str, default=None,
                        help='Output filename (default: auto-generated)')
-    parser.add_argument('--output-dir', type=str, default='metadata_test_files',
-                       help='Output directory for generated files (default: metadata_test_files)')
+    parser.add_argument('--output-dir', type=str, default='test_obus/metadata',
+                       help='Output directory for generated files (default: test_obus/metadata)')
     parser.add_argument('--no-byte-alignment', action='store_true',
                        help='Use incorrect 0-padding instead of byte_alignment() (for testing)')
     parser.add_argument('--test-alignment', action='store_true',
@@ -502,7 +397,6 @@ Examples:
     type_map = {
         'cll': METADATA_TYPE_HDR_CLL,
         'mdcv': METADATA_TYPE_HDR_MDCV,
-        'scalability': METADATA_TYPE_SCALABILITY,
         't35': METADATA_TYPE_ITUT_T35,
         'timecode': METADATA_TYPE_TIMECODE,
         'hash': METADATA_TYPE_DECODED_FRAME_HASH,
