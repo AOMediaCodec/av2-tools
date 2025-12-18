@@ -107,10 +107,17 @@ const std::map<MetadataType, std::string> METADATA_TYPE_NAMES = {
   {MetadataType::UNKNOWN_METADATA, "UNKNOWN_METADATA"}};
 
 const std::map<uint32_t, MetadataType> VALUE_TO_METADATA_TYPE = {
-  {0, MetadataType::RESERVED},    {1, MetadataType::HDR_CLL},       {2, MetadataType::HDR_MDCV},
-  {3, MetadataType::SCALABILITY}, {4, MetadataType::ITUT_T35},      {5, MetadataType::TIMECODE},
-  {6, MetadataType::HASH},        {7, MetadataType::BANDING_HINTS}, {8, MetadataType::ICC_PROFILE},
-  {9, MetadataType::SCAN_TYPE},   {10, MetadataType::TEMPORAL_POINT_INFO}};
+  {0, MetadataType::RESERVED},
+  {1, MetadataType::HDR_CLL},
+  {2, MetadataType::HDR_MDCV},
+  {3, MetadataType::SCALABILITY},
+  {4, MetadataType::ITUT_T35},
+  {5, MetadataType::TIMECODE},
+  {6, MetadataType::HASH},
+  {7, MetadataType::BANDING_HINTS},
+  {8, MetadataType::ICC_PROFILE},
+  {9, MetadataType::SCAN_TYPE},
+  {10, MetadataType::TEMPORAL_POINT_INFO}};
 }  // namespace
 
 std::string to_string(OBUType type) {

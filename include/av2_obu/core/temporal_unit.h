@@ -11,10 +11,10 @@
 
 #pragma once
 
+#include <nlohmann/json.hpp>
+
 #include <cstddef>
 #include <vector>
-
-#include <nlohmann/json.hpp>
 
 namespace av2_obu {
 

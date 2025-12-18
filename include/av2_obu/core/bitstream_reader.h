@@ -42,6 +42,12 @@ public:
   // ns(n) - Read unsigned encoded integer with maximum number of values n
   uint32_t read_ns(uint32_t n);
 
+  // rg(n) - Rice-Golomb coding with parameter n
+  uint32_t read_rg(uint32_t n);
+
+  // tu(mx) - Truncated unary encoding with maximum value mx
+  uint32_t read_tu(uint32_t mx);
+
   // Byte align (skip to next byte boundary)
   void byte_align();
 

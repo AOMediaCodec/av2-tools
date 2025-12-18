@@ -52,14 +52,14 @@ public:
 private:
   // Metadata unit header fields
   uint32_t metadata_type_ = 0;
-  uint32_t muh_header_size_ = 0;        // 1 for simple, actual size for group
+  uint32_t muh_header_size_ = 0;  // 1 for simple, actual size for group
   uint32_t muh_cancel_flag_ = 0;
-  uint32_t muh_payload_size_ = 0;       // 0 for simple (not signaled)
+  uint32_t muh_payload_size_ = 0;  // 0 for simple (not signaled)
   uint32_t muh_layer_idc_ = 0;
   uint32_t muh_persistence_idc_ = 0;
-  uint32_t muh_priority_ = 0;           // 0 for simple
+  uint32_t muh_priority_ = 0;  // 0 for simple
   uint32_t muh_reserved_zero_2bits_ = 0;
-  uint32_t muh_xlayer_map_ = 0;         // 0 for simple
+  uint32_t muh_xlayer_map_ = 0;  // 0 for simple
   std::vector<uint8_t> muh_mlayer_maps_;
   std::vector<uint8_t> muh_header_extension_bytes_;
 

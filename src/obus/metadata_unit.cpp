@@ -26,8 +26,8 @@ bool MetadataUnit::parse_simple_header(BitstreamReader& br) {
 
   // Simple header has implicit values
   muh_header_size_ = 1;
-  muh_payload_size_ = 0; // Not signaled
-  muh_priority_ = 0;     // Default
+  muh_payload_size_ = 0;  // Not signaled
+  muh_priority_ = 0;      // Default
 
   spdlog::debug("  MetadataUnit (simple header):");
   spdlog::debug("    muh_layer_idc: {}", muh_layer_idc_);
@@ -39,7 +39,7 @@ bool MetadataUnit::parse_simple_header(BitstreamReader& br) {
 }
 
 bool MetadataUnit::parse_group_header(BitstreamReader& br, uint32_t obu_xlayer_id) {
-  // Parse metadata group unit header 
+  // Parse metadata group unit header
   metadata_type_ = br.read_leb128();
 
   uint8_t header_byte = static_cast<uint8_t>(br.read_bits(8));
@@ -150,10 +150,14 @@ bool MetadataUnit::parse_payload(BitstreamReader& br) {
       luminance_max_ = static_cast<uint32_t>(br.read_bits(32));
       luminance_min_ = static_cast<uint32_t>(br.read_bits(32));
 
-      spdlog::debug("      primary_chromaticity (G): ({}, {})", primary_chromaticity_x_[0], primary_chromaticity_y_[0]);
-      spdlog::debug("      primary_chromaticity (B): ({}, {})", primary_chromaticity_x_[1], primary_chromaticity_y_[1]);
-      spdlog::debug("      primary_chromaticity (R): ({}, {})", primary_chromaticity_x_[2], primary_chromaticity_y_[2]);
-      spdlog::debug("      white_point_chromaticity: ({}, {})", white_point_chromaticity_x_, white_point_chromaticity_y_);
+      spdlog::debug("      primary_chromaticity (G): ({}, {})", primary_chromaticity_x_[0],
+                    primary_chromaticity_y_[0]);
+      spdlog::debug("      primary_chromaticity (B): ({}, {})", primary_chromaticity_x_[1],
+                    primary_chromaticity_y_[1]);
+      spdlog::debug("      primary_chromaticity (R): ({}, {})", primary_chromaticity_x_[2],
+                    primary_chromaticity_y_[2]);
+      spdlog::debug("      white_point_chromaticity: ({}, {})", white_point_chromaticity_x_,
+                    white_point_chromaticity_y_);
       spdlog::debug("      luminance_max: {}", luminance_max_);
       spdlog::debug("      luminance_min: {}", luminance_min_);
       break;
@@ -187,7 +191,8 @@ bool MetadataUnit::parse_payload(BitstreamReader& br) {
             payload_bytes_remaining >= 2) {
           uint8_t provider_high = static_cast<uint8_t>(br.read_bits(8));
           uint8_t provider_low = static_cast<uint8_t>(br.read_bits(8));
-          itu_t_t35_terminal_provider_code_ = (static_cast<uint16_t>(provider_high) << 8) | provider_low;
+          itu_t_t35_terminal_provider_code_ =
+            (static_cast<uint16_t>(provider_high) << 8) | provider_low;
           spdlog::debug("      itu_t_t35_terminal_provider_code: 0x{:04x}",
                         itu_t_t35_terminal_provider_code_);
           payload_bytes_remaining -= 2;
@@ -274,7 +279,7 @@ bool MetadataUnit::parse_payload(BitstreamReader& br) {
             three_color_components_ = static_cast<uint8_t>(br.read_bits(1));
             uint32_t numComponents = three_color_components_ ? 3 : 1;
             spdlog::debug("      three_color_components: {} ({} components)",
-                         int(three_color_components_), numComponents);
+                          int(three_color_components_), numComponents);
 
             banding_components_.clear();
             for (uint32_t plane = 0; plane < numComponents; plane++) {
@@ -284,8 +289,8 @@ bool MetadataUnit::parse_payload(BitstreamReader& br) {
               if (comp.banding_in_component_present_flag) {
                 comp.max_band_width_minus4 = static_cast<uint8_t>(br.read_bits(6));
                 comp.max_band_step_minus1 = static_cast<uint8_t>(br.read_bits(4));
-                spdlog::debug("      component[{}]: present, width={}, step={}",
-                             plane, comp.max_band_width_minus4, comp.max_band_step_minus1);
+                spdlog::debug("      component[{}]: present, width={}, step={}", plane,
+                              comp.max_band_width_minus4, comp.max_band_step_minus1);
               } else {
                 spdlog::debug("      component[{}]: not present", plane);
               }
@@ -295,20 +300,24 @@ bool MetadataUnit::parse_payload(BitstreamReader& br) {
 
             band_units_information_present_flag_ = static_cast<uint8_t>(br.read_bits(1));
             spdlog::debug("      band_units_information_present_flag: {}",
-                         int(band_units_information_present_flag_));
+                          int(band_units_information_present_flag_));
 
             if (band_units_information_present_flag_) {
               num_band_units_rows_minus_1_ = static_cast<uint8_t>(br.read_bits(5));
               num_band_units_cols_minus_1_ = static_cast<uint8_t>(br.read_bits(5));
               varying_size_band_units_flag_ = static_cast<uint8_t>(br.read_bits(1));
 
-              spdlog::debug("      num_band_units_rows_minus_1: {}", int(num_band_units_rows_minus_1_));
-              spdlog::debug("      num_band_units_cols_minus_1: {}", int(num_band_units_cols_minus_1_));
-              spdlog::debug("      varying_size_band_units_flag: {}", int(varying_size_band_units_flag_));
+              spdlog::debug("      num_band_units_rows_minus_1: {}",
+                            int(num_band_units_rows_minus_1_));
+              spdlog::debug("      num_band_units_cols_minus_1: {}",
+                            int(num_band_units_cols_minus_1_));
+              spdlog::debug("      varying_size_band_units_flag: {}",
+                            int(varying_size_band_units_flag_));
 
               if (varying_size_band_units_flag_) {
                 band_block_in_luma_samples_ = static_cast<uint8_t>(br.read_bits(3));
-                spdlog::debug("      band_block_in_luma_samples: {}", int(band_block_in_luma_samples_));
+                spdlog::debug("      band_block_in_luma_samples: {}",
+                              int(band_block_in_luma_samples_));
 
                 // Read vertical sizes
                 vert_size_in_band_blocks_minus1_.clear();
@@ -325,8 +334,8 @@ bool MetadataUnit::parse_payload(BitstreamReader& br) {
                 }
 
                 spdlog::debug("      Read {} vertical and {} horizontal band block sizes",
-                             vert_size_in_band_blocks_minus1_.size(),
-                             horz_size_in_band_blocks_minus1_.size());
+                              vert_size_in_band_blocks_minus1_.size(),
+                              horz_size_in_band_blocks_minus1_.size());
               }
 
               // Read banding flags for each band unit
@@ -340,9 +349,11 @@ bool MetadataUnit::parse_payload(BitstreamReader& br) {
                 banding_in_band_unit_present_flags_.push_back(row);
               }
 
-              uint32_t total_units = (num_band_units_rows_minus_1_ + 1) * (num_band_units_cols_minus_1_ + 1);
+              uint32_t total_units =
+                (num_band_units_rows_minus_1_ + 1) * (num_band_units_cols_minus_1_ + 1);
               spdlog::debug("      Read banding flags for {} band units ({} rows x {} cols)",
-                           total_units, num_band_units_rows_minus_1_ + 1, num_band_units_cols_minus_1_ + 1);
+                            total_units, num_band_units_rows_minus_1_ + 1,
+                            num_band_units_cols_minus_1_ + 1);
             }
           }
         }
@@ -420,9 +431,12 @@ bool MetadataUnit::parse_payload(BitstreamReader& br) {
 
           // Log hash in hex format
           const char* hash_label = per_plane_ ? "plane_hash" : "frame_hash";
-          spdlog::debug("      {}[{}]: {:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-                        hash_label, i, hash[0], hash[1], hash[2], hash[3], hash[4], hash[5], hash[6], hash[7],
-                        hash[8], hash[9], hash[10], hash[11], hash[12], hash[13], hash[14], hash[15]);
+          spdlog::debug(
+            "      {}[{}]: "
+            "{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:"
+            "02x}{:02x}",
+            hash_label, i, hash[0], hash[1], hash[2], hash[3], hash[4], hash[5], hash[6], hash[7],
+            hash[8], hash[9], hash[10], hash[11], hash[12], hash[13], hash[14], hash[15]);
         }
       }
       break;
@@ -433,7 +447,8 @@ bool MetadataUnit::parse_payload(BitstreamReader& br) {
       {
         uint32_t n = frame_presentation_time_length_minus_1_ + 1;
         frame_presentation_time_ = static_cast<uint32_t>(br.read_bits(n));
-        spdlog::debug("      frame_presentation_time_length_minus_1: {}", int(frame_presentation_time_length_minus_1_));
+        spdlog::debug("      frame_presentation_time_length_minus_1: {}",
+                      int(frame_presentation_time_length_minus_1_));
         spdlog::debug("      frame_presentation_time: {} ({} bits)", frame_presentation_time_, n);
       }
       break;
@@ -451,13 +466,15 @@ bool MetadataUnit::parse_payload(BitstreamReader& br) {
 
     // Check for non-byte-aligned parsing
     if (bits_consumed % 8 != 0) {
-      spdlog::debug("    Metadata payload parsing ended at non-byte-aligned position ({} bits, {} remainder)",
-                    bits_consumed, bits_consumed % 8);
+      spdlog::debug(
+        "    Metadata payload parsing ended at non-byte-aligned position ({} bits, {} remainder)",
+        bits_consumed, bits_consumed % 8);
     }
 
     if (bits_consumed < expected_bits) {
       uint32_t bits_to_skip = expected_bits - bits_consumed;
-      spdlog::debug("    Skipping {} remaining payload bits ({} bytes)", bits_to_skip, bits_to_skip / 8);
+      spdlog::debug("    Skipping {} remaining payload bits ({} bytes)", bits_to_skip,
+                    bits_to_skip / 8);
 
       // Skip remaining bits
       while (bits_to_skip >= 32) {
@@ -501,10 +518,14 @@ void MetadataUnit::dump() const {
       spdlog::debug("      max_cll: {}", max_cll_);
       spdlog::debug("      max_fall: {}", max_fall_);
     } else if (type == MetadataType::HDR_MDCV) {
-      spdlog::debug("      primary_chromaticity (G): ({}, {})", primary_chromaticity_x_[0], primary_chromaticity_y_[0]);
-      spdlog::debug("      primary_chromaticity (B): ({}, {})", primary_chromaticity_x_[1], primary_chromaticity_y_[1]);
-      spdlog::debug("      primary_chromaticity (R): ({}, {})", primary_chromaticity_x_[2], primary_chromaticity_y_[2]);
-      spdlog::debug("      white_point_chromaticity: ({}, {})", white_point_chromaticity_x_, white_point_chromaticity_y_);
+      spdlog::debug("      primary_chromaticity (G): ({}, {})", primary_chromaticity_x_[0],
+                    primary_chromaticity_y_[0]);
+      spdlog::debug("      primary_chromaticity (B): ({}, {})", primary_chromaticity_x_[1],
+                    primary_chromaticity_y_[1]);
+      spdlog::debug("      primary_chromaticity (R): ({}, {})", primary_chromaticity_x_[2],
+                    primary_chromaticity_y_[2]);
+      spdlog::debug("      white_point_chromaticity: ({}, {})", white_point_chromaticity_x_,
+                    white_point_chromaticity_y_);
       spdlog::debug("      luminance_max: {}", luminance_max_);
       spdlog::debug("      luminance_min: {}", luminance_min_);
     } else if (type == MetadataType::ITUT_T35) {
@@ -546,9 +567,12 @@ void MetadataUnit::dump() const {
       const char* hash_label = per_plane_ ? "plane_hash" : "frame_hash";
       for (size_t i = 0; i < hashes_.size(); i++) {
         const auto& hash = hashes_[i];
-        spdlog::debug("      {}[{}]: {:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-                      hash_label, i, hash[0], hash[1], hash[2], hash[3], hash[4], hash[5], hash[6], hash[7],
-                      hash[8], hash[9], hash[10], hash[11], hash[12], hash[13], hash[14], hash[15]);
+        spdlog::debug(
+          "      {}[{}]: "
+          "{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:"
+          "02x}{:02x}",
+          hash_label, i, hash[0], hash[1], hash[2], hash[3], hash[4], hash[5], hash[6], hash[7],
+          hash[8], hash[9], hash[10], hash[11], hash[12], hash[13], hash[14], hash[15]);
       }
     } else if (type == MetadataType::ICC_PROFILE) {
       if (!icc_profile_data_payload_bytes_.empty()) {
@@ -559,7 +583,8 @@ void MetadataUnit::dump() const {
       spdlog::debug("      mps_source_scan_type_idc: {}", int(mps_source_scan_type_idc_));
       spdlog::debug("      mps_duplicate_flag: {}", int(mps_duplicate_flag_));
     } else if (type == MetadataType::TEMPORAL_POINT_INFO) {
-      spdlog::debug("      frame_presentation_time_length_minus_1: {}", int(frame_presentation_time_length_minus_1_));
+      spdlog::debug("      frame_presentation_time_length_minus_1: {}",
+                    int(frame_presentation_time_length_minus_1_));
       spdlog::debug("      frame_presentation_time: {}", frame_presentation_time_);
     } else if (type == MetadataType::BANDING_HINTS) {
       spdlog::debug("      coding_banding_present_flag: {}", int(coding_banding_present_flag_));
@@ -568,21 +593,21 @@ void MetadataUnit::dump() const {
         spdlog::debug("      banding_hints_flag: {}", int(banding_hints_flag_));
         if (banding_hints_flag_) {
           spdlog::debug("      three_color_components: {} ({} components)",
-                       int(three_color_components_), three_color_components_ ? 3 : 1);
+                        int(three_color_components_), three_color_components_ ? 3 : 1);
           for (size_t i = 0; i < banding_components_.size(); i++) {
             const auto& comp = banding_components_[i];
             if (comp.banding_in_component_present_flag) {
-              spdlog::debug("      component[{}]: width={}, step={}",
-                           i, comp.max_band_width_minus4, comp.max_band_step_minus1);
+              spdlog::debug("      component[{}]: width={}, step={}", i, comp.max_band_width_minus4,
+                            comp.max_band_step_minus1);
             }
           }
           if (band_units_information_present_flag_) {
-            spdlog::debug("      band_units: {} rows x {} cols",
-                         num_band_units_rows_minus_1_ + 1, num_band_units_cols_minus_1_ + 1);
+            spdlog::debug("      band_units: {} rows x {} cols", num_band_units_rows_minus_1_ + 1,
+                          num_band_units_cols_minus_1_ + 1);
             if (varying_size_band_units_flag_) {
               spdlog::debug("      varying_size with {} vertical and {} horizontal sizes",
-                           vert_size_in_band_blocks_minus1_.size(),
-                           horz_size_in_band_blocks_minus1_.size());
+                            vert_size_in_band_blocks_minus1_.size(),
+                            horz_size_in_band_blocks_minus1_.size());
             }
           }
         }
@@ -627,16 +652,10 @@ nlohmann::ordered_json MetadataUnit::to_json() const {
       // Create arrays for primary chromaticities
       nlohmann::json primaries = nlohmann::json::array();
       for (int i = 0; i < 3; i++) {
-        primaries.push_back({
-          {"x", primary_chromaticity_x_[i]},
-          {"y", primary_chromaticity_y_[i]}
-        });
+        primaries.push_back({{"x", primary_chromaticity_x_[i]}, {"y", primary_chromaticity_y_[i]}});
       }
       j["primary_chromaticities"] = primaries;
-      j["white_point"] = {
-        {"x", white_point_chromaticity_x_},
-        {"y", white_point_chromaticity_y_}
-      };
+      j["white_point"] = {{"x", white_point_chromaticity_x_}, {"y", white_point_chromaticity_y_}};
       j["luminance_max"] = luminance_max_;
       j["luminance_min"] = luminance_min_;
     } else if (type == MetadataType::ITUT_T35) {
@@ -708,9 +727,9 @@ nlohmann::ordered_json MetadataUnit::to_json() const {
       for (const auto& hash : hashes_) {
         char hex_string[33];  // 32 hex chars + null terminator
         snprintf(hex_string, sizeof(hex_string),
-                 "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
-                 hash[0], hash[1], hash[2], hash[3], hash[4], hash[5], hash[6], hash[7],
-                 hash[8], hash[9], hash[10], hash[11], hash[12], hash[13], hash[14], hash[15]);
+                 "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x", hash[0],
+                 hash[1], hash[2], hash[3], hash[4], hash[5], hash[6], hash[7], hash[8], hash[9],
+                 hash[10], hash[11], hash[12], hash[13], hash[14], hash[15]);
         hash_array.push_back(std::string(hex_string));
       }
 
@@ -766,7 +785,8 @@ nlohmann::ordered_json MetadataUnit::to_json() const {
             nlohmann::json components = nlohmann::json::array();
             for (const auto& comp : banding_components_) {
               nlohmann::json comp_json;
-              comp_json["banding_in_component_present_flag"] = comp.banding_in_component_present_flag;
+              comp_json["banding_in_component_present_flag"] =
+                comp.banding_in_component_present_flag;
               if (comp.banding_in_component_present_flag) {
                 comp_json["max_band_width_minus4"] = comp.max_band_width_minus4;
                 comp_json["max_band_step_minus1"] = comp.max_band_step_minus1;

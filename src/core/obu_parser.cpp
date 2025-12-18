@@ -277,16 +277,16 @@ void OBUParser::build_temporal_units() {
 
   auto mode = tu_options_.mode;
   if (mode == TemporalUnitOptions::Mode::kAuto) {
-    bool has_tds = std::any_of(
-      obus_.begin(), obus_.end(),
-      [](const auto& obu) { return obu->type() == OBUType::TEMPORAL_DELIMITER; });
+    bool has_tds = std::any_of(obus_.begin(), obus_.end(), [](const auto& obu) {
+      return obu->type() == OBUType::TEMPORAL_DELIMITER;
+    });
 
     mode = has_tds ? TemporalUnitOptions::Mode::kTemporalDelimiter
                    : TemporalUnitOptions::Mode::kFrameHeuristic;
 
-    spdlog::debug("Auto-detected TU mode: {}",
-                  mode == TemporalUnitOptions::Mode::kTemporalDelimiter ? "TD-based"
-                                                                          : "frame-based");
+    spdlog::debug("Auto-detected TU mode: {}", mode == TemporalUnitOptions::Mode::kTemporalDelimiter
+                                                 ? "TD-based"
+                                                 : "frame-based");
   }
 
   switch (mode) {

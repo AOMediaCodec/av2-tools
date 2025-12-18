@@ -9,13 +9,13 @@
  * aomedia.org/license/patent-license/.
  */
 
-#include <av2_obu/av2_obu.h>
-
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <sstream>
 #include <string>
+
+#include <av2_obu/av2_obu.h>
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>

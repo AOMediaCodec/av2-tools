@@ -47,12 +47,7 @@ public:
 
   // Configure temporal unit detection
   struct TemporalUnitOptions {
-    enum class Mode {
-      kAuto,
-      kTemporalDelimiter,
-      kOrderHint,
-      kFrameHeuristic
-    };
+    enum class Mode { kAuto, kTemporalDelimiter, kOrderHint, kFrameHeuristic };
     Mode mode = Mode::kAuto;
     bool include_temporal_delimiters = true;
   };

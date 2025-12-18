@@ -132,6 +132,36 @@ uint32_t BitstreamReader::read_ns(uint32_t n) {
   return result;
 }
 
+uint32_t BitstreamReader::read_rg(uint32_t n) {
+  for (uint32_t q = 0; q < 32; q++) {
+    uint32_t rg_bit = read_bit();
+    if (rg_bit == 0) {
+      uint32_t remainder = static_cast<uint32_t>(read_bits(n));
+      uint32_t result = (q << n) + remainder;
+      spdlog::debug("read_rg({}) = {} (q={}, remainder={})", n, result, q, remainder);
+      return result;
+    }
+  }
+
+  // Overflow case - spec returns -1, but we throw to match error handling pattern
+  spdlog::error("Rice-Golomb overflow: no zero bit found in 32 attempts");
+  throw std::runtime_error("Rice-Golomb decoding overflow");
+}
+
+uint32_t BitstreamReader::read_tu(uint32_t mx) {
+  for (uint32_t idx = 0; idx < mx; idx++) {
+    uint32_t tu_bit = read_bit();
+    if (tu_bit == 0) {
+      spdlog::debug("read_tu({}) = {} (found 0 at idx={})", mx, idx, idx);
+      return idx;
+    }
+  }
+
+  // Reached maximum - final 0 is omitted
+  spdlog::debug("read_tu({}) = {} (max reached)", mx, mx);
+  return mx;
+}
+
 void BitstreamReader::byte_align() {
   if (bit_pos_ % 8 != 0) {
     bit_pos_ = ((bit_pos_ / 8) + 1) * 8;

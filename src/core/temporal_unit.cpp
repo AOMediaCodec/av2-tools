@@ -9,9 +9,8 @@
  * aomedia.org/license/patent-license/.
  */
 
-#include <av2_obu/core/temporal_unit.h>
-
 #include <av2_obu/core/base_obu.h>
+#include <av2_obu/core/temporal_unit.h>
 
 namespace av2_obu {
 
