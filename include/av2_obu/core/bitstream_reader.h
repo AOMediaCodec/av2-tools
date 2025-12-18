@@ -33,6 +33,12 @@ public:
   // f(1) - Read a single bit
   uint32_t read_bit() { return static_cast<uint32_t>(read_bits(1)); }
 
+  // le(n) - Unsigned little-endian n-byte number
+  uint64_t read_le(uint32_t n);
+
+  // su(n) - Signed integer converted from n-bit unsigned
+  int32_t read_su(uint32_t n);
+
   // uvlc() - Read variable length unsigned number
   uint64_t read_uvlc();
 

@@ -58,6 +58,46 @@ uint64_t BitstreamReader::read_bits(uint32_t n) {
   return result;
 }
 
+uint64_t BitstreamReader::read_le(uint32_t n) {
+  if (n == 0)
+    return 0;
+  if (n > 8) {
+    spdlog::error("Cannot read more than 8 bytes at once (requested: {})", n);
+    throw std::runtime_error("Invalid le() byte count");
+  }
+
+  uint64_t t = 0;
+  for (uint32_t i = 0; i < n; i++) {
+    uint8_t byte = static_cast<uint8_t>(read_bits(8));
+    t += (static_cast<uint64_t>(byte) << (i * 8));
+  }
+
+  spdlog::debug("read_le({}) = {}", n, t);
+  return t;
+}
+
+int32_t BitstreamReader::read_su(uint32_t n) {
+  if (n == 0)
+    return 0;
+  if (n > 32) {
+    spdlog::error("Cannot read more than 32 bits for su() (requested: {})", n);
+    throw std::runtime_error("Invalid su() bit count");
+  }
+
+  uint32_t value = static_cast<uint32_t>(read_bits(n));
+  uint32_t sign_mask = 1 << (n - 1);
+
+  int32_t result;
+  if (value & sign_mask) {
+    result = value - 2 * sign_mask;
+  } else {
+    result = value;
+  }
+
+  spdlog::debug("read_su({}) = {} (raw value={})", n, result, value);
+  return result;
+}
+
 uint64_t BitstreamReader::read_uvlc() {
   uint32_t leading_zeros = 0;
 
