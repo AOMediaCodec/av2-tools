@@ -101,6 +101,7 @@ private:
   uint8_t hash_type_ = 0;
   uint8_t per_plane_ = 0;
   uint8_t has_grain_ = 0;
+  uint8_t is_monochrome_ = 0;
   uint8_t hash_reserved_ = 0;
   std::vector<std::array<uint8_t, 16>> hashes_;  // Each hash is 16 bytes (frame_hash or plane_hash)
 
