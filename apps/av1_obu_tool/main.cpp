@@ -39,6 +39,11 @@
 #include <string>
 #include <vector>
 
+#ifdef AV1_TOOL_WITH_MP4
+#include <ISOMovies.h>
+#include <MP4Movies.h>
+#endif
+
 using json = nlohmann::json;
 
 // ---------------------------------------------------------------------------
@@ -453,6 +458,174 @@ public:
     return true;
   }
 
+  // Parse a single MP4 AV1 sample (flat OBU sequence, has_size_field=1).
+  // sample_idx is encoded into file_offset as (sample_idx << 32 | intra_offset).
+  void parse_sample(const uint8_t* data, size_t size, int sample_idx) {
+    size_t off = 0;
+    while (off < size) {
+      size_t remaining = size - off;
+      const uint8_t* p = data + off;
+
+      if (remaining < 1)
+        break;
+
+      // Parse OBU header byte(s) to find total OBU size so we can advance correctly.
+      uint8_t b0 = p[0];
+      bool extension_flag = ((b0 >> 2) & 0x1) != 0;
+      bool has_size_field = ((b0 >> 1) & 0x1) != 0;
+      size_t hdr_bytes = extension_flag ? 2 : 1;
+
+      if (!has_size_field) {
+        // ISOBMFF AV1 samples must have has_size_field=1; skip malformed OBU
+        spdlog::warn("OBU at sample {} +{} has has_size_field=0, skipping rest of sample",
+                     sample_idx, off);
+        break;
+      }
+
+      if (hdr_bytes >= remaining) {
+        spdlog::warn("Truncated OBU header at sample {} +{}", sample_idx, off);
+        break;
+      }
+
+      // Read obu_size LEB128
+      size_t leb_pos = hdr_bytes;
+      uint64_t payload_size = 0;
+      size_t leb_bytes = 0;
+      for (int i = 0; i < 8; ++i) {
+        if (leb_pos + i >= remaining) {
+          leb_bytes = 0;
+          break;
+        }
+        uint8_t lb = p[leb_pos + i];
+        payload_size |= static_cast<uint64_t>(lb & 0x7F) << (i * 7);
+        ++leb_bytes;
+        if (!(lb & 0x80))
+          break;
+      }
+      if (leb_bytes == 0) {
+        spdlog::warn("Truncated obu_size LEB128 at sample {} +{}", sample_idx, off);
+        break;
+      }
+
+      size_t total_obu_bytes = hdr_bytes + leb_bytes + static_cast<size_t>(payload_size);
+      if (off + total_obu_bytes > size) {
+        spdlog::warn("OBU extends beyond sample at sample {} +{}", sample_idx, off);
+        break;
+      }
+
+      // Encode position: upper 32 bits = sample index, lower 32 bits = intra-sample offset
+      uint64_t encoded_offset = (static_cast<uint64_t>(sample_idx) << 32) |
+                                static_cast<uint64_t>(off & 0xFFFFFFFFu);
+
+      parse_obu_from_buffer(p, total_obu_bytes, encoded_offset, sample_idx, 0);
+
+      off += total_obu_bytes;
+    }
+  }
+
+#ifdef AV1_TOOL_WITH_MP4
+  bool parse_mp4(const std::string& path) {
+    MP4Err err = MP4NoErr;
+    MP4Movie moov = nullptr;
+
+    err = MP4OpenMovieFile(&moov, path.c_str(), MP4OpenMovieNormal);
+    if (err != MP4NoErr) {
+      spdlog::error("Failed to open MP4 file: {} (err={})", path, static_cast<int>(err));
+      return false;
+    }
+
+    u32 track_count = 0;
+    if (MP4GetMovieTrackCount(moov, &track_count) != MP4NoErr) {
+      MP4DisposeMovie(moov);
+      spdlog::error("Failed to get track count from: {}", path);
+      return false;
+    }
+
+    bool found_av1 = false;
+    file_path_ = path;
+    from_mp4_ = true;
+
+    for (u32 track_number = 1; track_number <= track_count; ++track_number) {
+      MP4Track trak = nullptr;
+      if (MP4GetMovieIndTrack(moov, track_number, &trak) != MP4NoErr || !trak)
+        continue;
+
+      MP4TrackReader reader = nullptr;
+      if (MP4CreateTrackReader(trak, &reader) != MP4NoErr || !reader)
+        continue;
+
+      MP4Handle sample_entry_h = nullptr;
+      MP4NewHandle(0, &sample_entry_h);
+      if (!sample_entry_h) {
+        MP4DisposeTrackReader(reader);
+        continue;
+      }
+
+      err = MP4TrackReaderGetCurrentSampleDescription(reader, sample_entry_h);
+      if (err != MP4NoErr) {
+        MP4DisposeHandle(sample_entry_h);
+        MP4DisposeTrackReader(reader);
+        continue;
+      }
+
+      u32 sample_entry_type = 0;
+      ISOGetSampleDescriptionType(sample_entry_h, &sample_entry_type);
+
+      // Unwrap resv / encv to get the original format
+      if (sample_entry_type == MP4_FOUR_CHAR_CODE('r', 'e', 's', 'v') ||
+          sample_entry_type == MP4_FOUR_CHAR_CODE('e', 'n', 'c', 'v')) {
+        ISOGetOriginalFormat(sample_entry_h, &sample_entry_type);
+      }
+
+      MP4DisposeHandle(sample_entry_h);
+
+      if (sample_entry_type != MP4_FOUR_CHAR_CODE('a', 'v', '0', '1')) {
+        MP4DisposeTrackReader(reader);
+        continue;
+      }
+
+      // Found an AV1 track — read all access units
+      found_av1 = true;
+      spdlog::debug("av1_obu_tool: AV1 track found at track index {}", track_number);
+
+      MP4Handle au_h = nullptr;
+      MP4NewHandle(0, &au_h);
+      if (!au_h) {
+        MP4DisposeTrackReader(reader);
+        continue;
+      }
+
+      u32 au_size = 0;
+      u32 flags = 0;
+      s32 cts = 0, dts = 0;
+      int au_index = 0;
+
+      while ((err = MP4TrackReaderGetNextAccessUnit(reader, au_h, &au_size, &flags, &cts, &dts)) ==
+             MP4NoErr) {
+        const uint8_t* bytes = reinterpret_cast<const uint8_t*>(*au_h);
+        parse_sample(bytes, static_cast<size_t>(au_size), au_index);
+        ++au_index;
+        MP4SetHandleSize(au_h, 0);
+      }
+
+      if (err != MP4EOF && err != MP4NoErr && err != MP4BadParamErr) {
+        spdlog::warn("Track reader error on track {} (err={})", track_number, static_cast<int>(err));
+      }
+
+      MP4DisposeHandle(au_h);
+      MP4DisposeTrackReader(reader);
+    }
+
+    MP4DisposeMovie(moov);
+
+    if (!found_av1) {
+      spdlog::error("No AV1 track (av01) found in: {}", path);
+      return false;
+    }
+    return true;
+  }
+#endif  // AV1_TOOL_WITH_MP4
+
   const std::vector<ObuInfo>& obus() const { return obus_; }
   const std::string& file_path() const { return file_path_; }
   size_t file_size() const { return file_size_; }
@@ -501,7 +674,13 @@ public:
       std::cout << "Type: " << obu_type_name(h.obu_type) << std::endl;
       std::cout << "Temporal unit: " << o.temporal_unit_index << std::endl;
       std::cout << "Frame unit: " << o.frame_unit_index << std::endl;
-      std::cout << "Position: " << o.file_offset << std::endl;
+      if (from_mp4_) {
+        uint32_t sample_idx = static_cast<uint32_t>(o.file_offset >> 32);
+        uint32_t sample_off = static_cast<uint32_t>(o.file_offset & 0xFFFFFFFFu);
+        std::cout << "Position: sample " << sample_idx << " @ +" << sample_off << std::endl;
+      } else {
+        std::cout << "Position: " << o.file_offset << std::endl;
+      }
       std::cout << "Header length: " << h.header_size << std::endl;
       std::cout << "Payload size: " << o.payload_size << std::endl;
       if (h.extension_flag) {
@@ -538,7 +717,12 @@ public:
 
       // position — mirrors AV2's OBUPosition::to_json()
       json jp;
-      jp["file_offset"] = o.file_offset;
+      if (from_mp4_) {
+        jp["sample_index"] = static_cast<uint32_t>(o.file_offset >> 32);
+        jp["sample_offset"] = static_cast<uint32_t>(o.file_offset & 0xFFFFFFFFu);
+      } else {
+        jp["file_offset"] = o.file_offset;
+      }
       jp["obu_size"] = h.header_size + o.payload_size;
       jp["header_size"] = h.header_size;
       jp["payload_size"] = o.payload_size;
@@ -811,10 +995,59 @@ private:
   size_t file_size_ = 0;
   std::vector<uint8_t> file_data_;
   std::vector<ObuInfo> obus_;
+  bool from_mp4_ = false;
+
+  // Parse an OBU directly from an arbitrary buffer (used for MP4 sample parsing).
+  // encoded_offset and the tu/fu indices are passed in directly.
+  void parse_obu_from_buffer(const uint8_t* data, size_t total_obu_bytes, uint64_t encoded_offset,
+                             int tu_idx, int fu_idx) {
+    if (total_obu_bytes == 0)
+      return;
+
+    BitReader br(data, total_obu_bytes);
+
+    ObuInfo info{};
+    info.file_offset = encoded_offset;
+    info.obu_length = total_obu_bytes;
+    info.temporal_unit_index = tu_idx;
+    info.frame_unit_index = fu_idx;
+    info.has_metadata = false;
+
+    if (!parse_obu_header(br, info.header)) {
+      spdlog::warn("Failed to parse OBU header (encoded_offset=0x{:x})", encoded_offset);
+      return;
+    }
+
+    uint64_t declared_obu_size = 0;
+    if (info.header.has_size_field) {
+      int sz_bytes = 0;
+      declared_obu_size = br.leb128(sz_bytes);
+      if (br.error()) {
+        spdlog::warn("Failed to read obu_size leb128 (encoded_offset=0x{:x})", encoded_offset);
+        return;
+      }
+    } else {
+      uint64_t header_bytes = info.header.extension_flag ? 2 : 1;
+      declared_obu_size =
+        (total_obu_bytes > header_bytes) ? total_obu_bytes - header_bytes : 0;
+    }
+    info.payload_size = declared_obu_size;
+
+    size_t payload_start = br.byte_offset();
+    size_t payload_len = static_cast<size_t>(declared_obu_size);
+    if (payload_start + payload_len <= total_obu_bytes) {
+      info.raw_payload.assign(data + payload_start, data + payload_start + payload_len);
+    }
+
+    if (info.header.obu_type == ObuType::kMetadata) {
+      parse_metadata_obu_payload(br, declared_obu_size, info);
+    }
+
+    obus_.push_back(std::move(info));
+  }
 
   // ---- Bitstream parsing: temporal_unit / frame_unit / OBU hierarchy ----
-  void parse_bitstream() {
-    size_t pos = 0;
+  void parse_bitstream() {    size_t pos = 0;
     int tu_idx = 0;
 
     while (pos < file_size_) {
@@ -1172,8 +1405,30 @@ int main(int argc, char** argv) {
   }
 
   Av1Parser parser;
-  if (!parser.parse_file(input_file))
+
+  // Auto-detect MP4 container by file extension
+  auto has_mp4_ext = [](const std::string& path) {
+    std::string lower;
+    for (char c : path)
+      lower += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return lower.size() >= 4 &&
+           (lower.substr(lower.size() - 4) == ".mp4" ||
+            lower.substr(lower.size() - 4) == ".mov" ||
+            lower.substr(lower.size() - 4) == ".m4v");
+  };
+
+  if (has_mp4_ext(input_file)) {
+#ifdef AV1_TOOL_WITH_MP4
+    if (!parser.parse_mp4(input_file))
+      return 1;
+#else
+    spdlog::error("MP4 input requires building with BUILD_PACKAGER=ON");
     return 1;
+#endif
+  } else {
+    if (!parser.parse_file(input_file))
+      return 1;
+  }
 
   // Helper lambda to write a string to stdout or file
   auto write_output = [&](const std::string& content) {
