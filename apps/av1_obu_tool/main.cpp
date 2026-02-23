@@ -1247,17 +1247,27 @@ private:
       const auto& d = m.hdr_mdcv;
       const char* primary_names[3] = {"R", "G", "B"};
       for (int i = 0; i < 3; ++i) {
-        std::cout << indent << "primary_chromaticity_x[" << primary_names[i]
-                  << "]: " << d.primary_chromaticity_x[i] << std::endl;
-        std::cout << indent << "primary_chromaticity_y[" << primary_names[i]
-                  << "]: " << d.primary_chromaticity_y[i] << std::endl;
+        std::cout << indent << "primary_chromaticity_x[" << primary_names[i] << "]: "
+                  << d.primary_chromaticity_x[i]
+                  << "  (" << std::fixed << std::setprecision(6)
+                  << (d.primary_chromaticity_x[i] / 65536.0) << ")" << std::endl;
+        std::cout << indent << "primary_chromaticity_y[" << primary_names[i] << "]: "
+                  << d.primary_chromaticity_y[i]
+                  << "  (" << std::fixed << std::setprecision(6)
+                  << (d.primary_chromaticity_y[i] / 65536.0) << ")" << std::endl;
       }
       std::cout << indent << "white_point_chromaticity_x: " << d.white_point_chromaticity_x
-                << std::endl;
+                << "  (" << std::fixed << std::setprecision(6)
+                << (d.white_point_chromaticity_x / 65536.0) << ")" << std::endl;
       std::cout << indent << "white_point_chromaticity_y: " << d.white_point_chromaticity_y
-                << std::endl;
-      std::cout << indent << "luminance_max: " << d.luminance_max << std::endl;
-      std::cout << indent << "luminance_min: " << d.luminance_min << std::endl;
+                << "  (" << std::fixed << std::setprecision(6)
+                << (d.white_point_chromaticity_y / 65536.0) << ")" << std::endl;
+      std::cout << indent << "luminance_max: " << d.luminance_max
+                << "  (" << std::fixed << std::setprecision(4)
+                << (d.luminance_max / 256.0) << " cd/m²)" << std::endl;
+      std::cout << indent << "luminance_min: " << d.luminance_min
+                << "  (" << std::fixed << std::setprecision(6)
+                << (d.luminance_min / 16384.0) << " cd/m²)" << std::endl;
     }
   }
 
@@ -1297,14 +1307,24 @@ private:
       json jd;
       json primaries = json::array();
       for (int i = 0; i < 3; ++i) {
-        primaries.push_back(
-          {{"x", d.primary_chromaticity_x[i]}, {"y", d.primary_chromaticity_y[i]}});
+        primaries.push_back({
+          {"x", d.primary_chromaticity_x[i]},
+          {"x_value", d.primary_chromaticity_x[i] / 65536.0},
+          {"y", d.primary_chromaticity_y[i]},
+          {"y_value", d.primary_chromaticity_y[i] / 65536.0},
+        });
       }
       jd["primaries_RGB"] = primaries;
-      jd["white_point"] = {{"x", d.white_point_chromaticity_x},
-                           {"y", d.white_point_chromaticity_y}};
+      jd["white_point"] = {
+        {"x", d.white_point_chromaticity_x},
+        {"x_value", d.white_point_chromaticity_x / 65536.0},
+        {"y", d.white_point_chromaticity_y},
+        {"y_value", d.white_point_chromaticity_y / 65536.0},
+      };
       jd["luminance_max"] = d.luminance_max;
+      jd["luminance_max_cd_m2"] = d.luminance_max / 256.0;
       jd["luminance_min"] = d.luminance_min;
+      jd["luminance_min_cd_m2"] = d.luminance_min / 16384.0;
       jm["hdr_mdcv"] = jd;
     }
     return jm;
