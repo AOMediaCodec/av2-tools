@@ -175,6 +175,7 @@ else()
 endif()
 
 add_subdirectory(apps/av2_obu_channel_sim)
+add_subdirectory(apps/av1_obu_tool)
 
 # ---- Install rules ----
 include(GNUInstallDirs)
