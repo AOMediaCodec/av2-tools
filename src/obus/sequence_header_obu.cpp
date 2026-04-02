@@ -24,24 +24,6 @@ bool SequenceHeaderOBU::parse_payload(std::ifstream& ifs) {
 
   spdlog::debug("Parsing AV2 sequence header payload ({} bytes)", position_.payload_size);
 
-  // TODO: TEMPORARY - Skip full parsing until new syntax is provided
-  // This flag should be removed once the sequence header syntax is updated
-  const bool SKIP_SH_PARSING = true;
-
-  if (SKIP_SH_PARSING) {
-    spdlog::warn(
-      "TEMPORARY: Skipping sequence header payload parsing (waiting for updated syntax)");
-
-    // Just read the raw payload without parsing
-    raw_payload_.resize(position_.payload_size);
-    if (!ifs.read(reinterpret_cast<char*>(raw_payload_.data()), position_.payload_size)) {
-      spdlog::error("Failed to read sequence header payload");
-      return false;
-    }
-
-    return true;
-  }
-
   try {
     // Create bitstream reader from the payload
     BitstreamReader br(ifs, position_.payload_size);
@@ -65,8 +47,6 @@ bool SequenceHeaderOBU::parse_payload(std::ifstream& ifs) {
         "Sequence header has {} unused bits (payload may contain trailing bits or parsing "
         "incomplete)",
         bits_remaining);
-      // This is not necessarily an error - could be trailing_bits padding
-      // But good to know for validation
     }
 
     spdlog::debug("Successfully parsed AV2 sequence header");

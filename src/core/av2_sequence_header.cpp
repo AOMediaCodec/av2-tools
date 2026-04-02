@@ -643,42 +643,55 @@ bool AV2SequenceHeader::parse(BitstreamReader& br) {
   spdlog::debug("Parsing AV2 Sequence Header");
 
   seq_header_id = br.read_uvlc();
-  seq_lcr_id = br.read_bits(3);
   seq_profile_idc = br.read_bits(5);
   single_picture_header_flag = br.read_bit();
 
-  spdlog::debug("  seq_header_id = {}", seq_header_id);
-  spdlog::debug("  seq_lcr_id = {}", seq_lcr_id);
-  spdlog::debug("  seq_profile_idc = {}", seq_profile_idc);
-  spdlog::debug("  single_picture_header_flag = {}", single_picture_header_flag);
-
-  // Level and tier (single values, not per-operating-point)
   seq_level_idx = br.read_bits(5);
-  if (seq_level_idx > 7) {
+  if (seq_level_idx > 3 && !single_picture_header_flag) {
     seq_tier = br.read_bit();
   } else {
     seq_tier = 0;
   }
 
-  // Chroma format and bit depth (inline, no longer in ColorConfig sub-syntax)
   chroma_format_idc = br.read_uvlc();
   bit_depth_idc = br.read_uvlc();
   set_chroma_format_and_bit_depth();
 
+  spdlog::debug("  seq_header_id = {}", seq_header_id);
+  spdlog::debug("  seq_profile_idc = {}", seq_profile_idc);
+  spdlog::debug("  single_picture_header_flag = {}", single_picture_header_flag);
   spdlog::debug("  chroma_format_idc = {}, bit_depth_idc = {}, BitDepth = {}", chroma_format_idc,
                 bit_depth_idc, BitDepth);
 
-  // Fields inferred when single_picture_header_flag is set
   if (single_picture_header_flag) {
-    monotonic_output_order_flag = 1;
-    seq_max_mlayer_cnt_minus_1 = 0;
-    SeqMaxMlayerCnt = 1;
+    seq_lcr_id = 0;
+    still_picture = 1;
     max_tlayer_id = 0;
     max_mlayer_id = 0;
+    SeqMaxMlayerCnt = 1;
+    monotonic_output_order_flag = 1;
   } else {
+    seq_lcr_id = br.read_bits(3);
+    still_picture = br.read_bit();
+    max_tlayer_id = br.read_bits(2);
+    max_mlayer_id = br.read_bits(3);
+
+    if (max_mlayer_id > 0) {
+      // CeilLog2(max_mlayer_id + 1)
+      uint32_t val = max_mlayer_id + 1;
+      uint32_t n = 0;
+      uint32_t tmp = val;
+      while (tmp > 1) {
+        tmp = (tmp + 1) >> 1;
+        n++;
+      }
+      seq_max_mlayer_cnt_minus_1 = br.read_bits(n);
+      SeqMaxMlayerCnt = seq_max_mlayer_cnt_minus_1 + 1;
+    } else {
+      SeqMaxMlayerCnt = 1;
+    }
+
     monotonic_output_order_flag = br.read_bit();
-    seq_max_mlayer_cnt_minus_1 = br.read_bits(3);
-    SeqMaxMlayerCnt = seq_max_mlayer_cnt_minus_1 + 1;
   }
 
   // Frame dimensions
@@ -701,95 +714,103 @@ bool AV2SequenceHeader::parse(BitstreamReader& br) {
     seq_cropping_win_right_offset = br.read_uvlc();
     seq_cropping_win_top_offset = br.read_uvlc();
     seq_cropping_win_bottom_offset = br.read_uvlc();
+  } else {
+    seq_cropping_win_left_offset = 0;
+    seq_cropping_win_right_offset = 0;
+    seq_cropping_win_top_offset = 0;
+    seq_cropping_win_bottom_offset = 0;
   }
 
-  // Decoder model section (simplified)
-  num_units_in_decoding_tick = br.read_bits(32);
-  seq_decoder_model_info_present_flag = br.read_bit();
-  if (seq_decoder_model_info_present_flag) {
-    if (!seq_decoder_model_info.parse(br))
-      return false;
+  // Decoder model
+  if (single_picture_header_flag) {
+    decoder_model_info_present_flag = 0;
+  } else {
+    seq_initial_display_delay_present_flag = br.read_bit();
+    if (seq_initial_display_delay_present_flag) {
+      seq_initial_display_delay_minus_1 = br.read_bits(4);
+    }
+
+    decoder_model_info_present_flag = br.read_bit();
+    if (decoder_model_info_present_flag) {
+      num_units_in_decoding_tick = br.read_bits(32);
+      seq_decoder_model_info_present_flag = br.read_bit();
+      if (seq_decoder_model_info_present_flag) {
+        if (!seq_decoder_model_info.parse(br))
+          return false;
+      }
+    }
   }
 
-  seq_initial_display_delay_present_flag = br.read_bit();
-  if (seq_initial_display_delay_present_flag) {
-    seq_initial_display_delay_minus_1 = br.read_bits(4);
+  // Initialize default TLayerDependencyMap
+  for (uint32_t mLayer = 0; mLayer < MAX_NUM_MLAYERS; mLayer++) {
+    for (uint32_t currTLayer = 0; currTLayer < MAX_NUM_TLAYERS; currTLayer++) {
+      for (uint32_t refTLayer = 0; refTLayer < MAX_NUM_TLAYERS; refTLayer++) {
+        TLayerDependencyMap[mLayer][currTLayer][refTLayer] =
+          (refTLayer <= currTLayer && currTLayer <= max_tlayer_id && mLayer <= max_mlayer_id) ? 1
+                                                                                             : 0;
+      }
+    }
   }
 
-  // Layer dependency maps
-  if (!single_picture_header_flag) {
-    max_tlayer_id = br.read_bits(2);
-    max_mlayer_id = br.read_bits(3);
+  // Initialize default MLayerDependencyMap
+  for (uint32_t currLayer = 0; currLayer < MAX_NUM_MLAYERS; currLayer++) {
+    for (uint32_t refLayer = 0; refLayer < MAX_NUM_MLAYERS; refLayer++) {
+      MLayerDependencyMap[currLayer][refLayer] =
+        (refLayer <= currLayer && currLayer <= max_mlayer_id) ? 1 : 0;
+    }
+  }
 
-    // Initialize default TLayerDependencyMap (identity: each layer depends on itself and below)
-    for (uint32_t ml = 0; ml < MAX_NUM_MLAYERS; ml++) {
-      for (uint32_t curr = 0; curr < MAX_NUM_TLAYERS; curr++) {
-        for (uint32_t ref = 0; ref < MAX_NUM_TLAYERS; ref++) {
-          TLayerDependencyMap[ml][curr][ref] = (ref <= curr) ? 1 : 0;
+  // Parse mlayer_dependency_map
+  if (max_mlayer_id > 0) {
+    mlayer_dependency_present_flag = br.read_bit();
+    if (mlayer_dependency_present_flag) {
+      for (uint32_t currLayer = 1; currLayer <= max_mlayer_id; currLayer++) {
+        for (int32_t refLayer = static_cast<int32_t>(currLayer); refLayer >= 0; refLayer--) {
+          MLayerDependencyMap[currLayer][refLayer] = br.read_bit();
         }
       }
     }
+  }
 
-    // Initialize default MLayerDependencyMap (each layer depends only on itself)
-    for (uint32_t curr = 0; curr < MAX_NUM_MLAYERS; curr++) {
-      for (uint32_t ref = 0; ref < MAX_NUM_MLAYERS; ref++) {
-        MLayerDependencyMap[curr][ref] = (ref == curr) ? 1 : 0;
-      }
-    }
-
-    // Parse mlayer_dependency_map
-    if (max_mlayer_id > 0) {
-      mlayer_dependency_present_flag = br.read_bit();
-      if (mlayer_dependency_present_flag) {
-        for (uint32_t currLayer = 1; currLayer <= max_mlayer_id; currLayer++) {
-          for (uint32_t refLayer = currLayer;; refLayer--) {
-            MLayerDependencyMap[currLayer][refLayer] = br.read_bit();
-            if (refLayer == 0)
-              break;
-          }
-        }
-      }
-    }
-
-    // Compute MLayerPresenceMap from MLayerDependencyMap
-    for (uint32_t i = 0; i < MAX_NUM_MLAYERS; i++) {
-      for (uint32_t j = 0; j < MAX_NUM_MLAYERS; j++) {
-        MLayerPresenceMap[i][j] = MLayerDependencyMap[i][j];
-      }
-    }
-
-    // Parse tlayer_dependency_map
-    if (max_tlayer_id > 0) {
-      multi_tlayer_dependency_map_present_flag = br.read_bit();
-
-      if (multi_tlayer_dependency_map_present_flag) {
-        // Parse per-mlayer tlayer dependency maps
-        for (uint32_t ml = 0; ml <= max_mlayer_id; ml++) {
-          for (uint32_t currLayer = 1; currLayer <= max_tlayer_id; currLayer++) {
-            for (uint32_t refLayer = currLayer;; refLayer--) {
-              TLayerDependencyMap[ml][currLayer][refLayer] = br.read_bit();
-              if (refLayer == 0)
-                break;
-            }
-          }
-        }
+  // Parse tlayer_dependency_map
+  if (max_tlayer_id > 0) {
+    tlayer_dependency_present_flag = br.read_bit();
+    if (tlayer_dependency_present_flag) {
+      if (max_mlayer_id > 0) {
+        multi_tlayer_dependency_map_present_flag = br.read_bit();
       } else {
-        // Parse single tlayer dependency map, replicate for all mlayers
-        for (uint32_t currLayer = 1; currLayer <= max_tlayer_id; currLayer++) {
-          for (uint32_t refLayer = currLayer;; refLayer--) {
-            uint32_t val = br.read_bit();
-            for (uint32_t ml = 0; ml <= max_mlayer_id; ml++) {
-              TLayerDependencyMap[ml][currLayer][refLayer] = val;
+        multi_tlayer_dependency_map_present_flag = 0;
+      }
+
+      for (uint32_t mLayer = 0; mLayer <= max_mlayer_id; mLayer++) {
+        for (uint32_t currTLayer = 1; currTLayer <= max_tlayer_id; currTLayer++) {
+          for (int32_t refTLayer = static_cast<int32_t>(currTLayer); refTLayer >= 0; refTLayer--) {
+            if (multi_tlayer_dependency_map_present_flag > 0 || mLayer == 0) {
+              TLayerDependencyMap[mLayer][currTLayer][refTLayer] = br.read_bit();
+            } else {
+              TLayerDependencyMap[mLayer][currTLayer][refTLayer] =
+                TLayerDependencyMap[0][currTLayer][refTLayer];
             }
-            if (refLayer == 0)
-              break;
           }
         }
       }
     }
   }
 
-  // Sub-configs in new order
+  // Compute MLayerPresenceMap
+  for (uint32_t mlayerId = 0; mlayerId < MAX_NUM_MLAYERS; mlayerId++) {
+    for (uint32_t refMlayer = 0; refMlayer < MAX_NUM_MLAYERS; refMlayer++) {
+      MLayerPresenceMap[mlayerId][refMlayer] = 0;
+      if (mlayerId == refMlayer || MLayerDependencyMap[mlayerId][refMlayer]) {
+        MLayerPresenceMap[mlayerId][refMlayer] = 1;
+        for (uint32_t depMLayerId = 0; depMLayerId < refMlayer; depMLayerId++) {
+          MLayerPresenceMap[mlayerId][depMLayerId] |= MLayerPresenceMap[refMlayer][depMLayerId];
+        }
+      }
+    }
+  }
+
+  // Sub-configs
   if (!partition_config.parse(br, single_picture_header_flag, Monochrome))
     return false;
   if (!segment_config.parse(br))
@@ -815,7 +836,6 @@ bool AV2SequenceHeader::parse(BitstreamReader& br) {
 
 json AV2SequenceHeader::to_json() const {
   json j = {{"seq_header_id", seq_header_id},
-            {"seq_lcr_id", seq_lcr_id},
             {"seq_profile_idc", seq_profile_idc},
             {"single_picture_header_flag", single_picture_header_flag},
             {"seq_level_idx", seq_level_idx},
@@ -825,9 +845,15 @@ json AV2SequenceHeader::to_json() const {
             {"BitDepth", BitDepth},
             {"Monochrome", Monochrome},
             {"NumPlanes", NumPlanes},
+            {"seq_lcr_id", seq_lcr_id},
+            {"still_picture", still_picture},
+            {"max_tlayer_id", max_tlayer_id},
+            {"max_mlayer_id", max_mlayer_id},
+            {"SeqMaxMlayerCnt", SeqMaxMlayerCnt},
+            {"monotonic_output_order_flag", monotonic_output_order_flag},
             {"max_frame_width", max_frame_width_minus_1 + 1},
             {"max_frame_height", max_frame_height_minus_1 + 1},
-            {"num_units_in_decoding_tick", num_units_in_decoding_tick},
+            {"decoder_model_info_present_flag", decoder_model_info_present_flag},
             {"partition_config", partition_config.to_json()},
             {"segment_config", segment_config.to_json()},
             {"intra_config", intra_config.to_json()},
@@ -849,11 +875,12 @@ json AV2SequenceHeader::to_json() const {
     j["seq_decoder_model_info"] = seq_decoder_model_info.to_json();
   }
 
-  if (!single_picture_header_flag) {
-    j["max_tlayer_id"] = max_tlayer_id;
-    j["max_mlayer_id"] = max_mlayer_id;
-    j["monotonic_output_order_flag"] = monotonic_output_order_flag;
-    j["SeqMaxMlayerCnt"] = SeqMaxMlayerCnt;
+  if (seq_initial_display_delay_present_flag) {
+    j["seq_initial_display_delay_minus_1"] = seq_initial_display_delay_minus_1;
+  }
+
+  if (decoder_model_info_present_flag) {
+    j["num_units_in_decoding_tick"] = num_units_in_decoding_tick;
   }
 
   return j;

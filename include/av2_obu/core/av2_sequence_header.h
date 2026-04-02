@@ -219,7 +219,6 @@ struct SequenceTileConfig {
 // Complete AV2 Sequence Header
 struct AV2SequenceHeader {
   uint64_t seq_header_id = 0;
-  uint32_t seq_lcr_id = 0;
   uint32_t seq_profile_idc = 0;
   uint32_t single_picture_header_flag = 0;
   uint32_t seq_level_idx = 0;
@@ -237,11 +236,14 @@ struct AV2SequenceHeader {
   bool Monochrome = false;
   uint32_t NumPlanes = 3;
 
-  // Output order: when 1, output order equals decoding order for the coded video sequence
-  uint32_t monotonic_output_order_flag = 0;
-
+  uint32_t seq_lcr_id = 0;
+  uint32_t still_picture = 0;
+  uint32_t max_tlayer_id = 0;
+  uint32_t max_mlayer_id = 0;
   uint32_t seq_max_mlayer_cnt_minus_1 = 0;
   uint32_t SeqMaxMlayerCnt = 0;
+  // Output order: when 1, output order equals decoding order for the coded video sequence
+  uint32_t monotonic_output_order_flag = 0;
 
   uint32_t frame_width_bits_minus_1 = 0;
   uint32_t frame_height_bits_minus_1 = 0;
@@ -255,16 +257,16 @@ struct AV2SequenceHeader {
   uint64_t seq_cropping_win_bottom_offset = 0;
 
   // Decoder model
+  uint32_t seq_initial_display_delay_present_flag = 0;
+  uint32_t seq_initial_display_delay_minus_1 = 0;
+  uint32_t decoder_model_info_present_flag = 0;
   uint32_t num_units_in_decoding_tick = 0;
   uint32_t seq_decoder_model_info_present_flag = 0;
   SeqDecoderModelInfo seq_decoder_model_info;
-  uint32_t seq_initial_display_delay_present_flag = 0;
-  uint32_t seq_initial_display_delay_minus_1 = 0;
 
   // Layer dependency
-  uint32_t max_tlayer_id = 0;
-  uint32_t max_mlayer_id = 0;
   uint32_t mlayer_dependency_present_flag = 0;
+  uint32_t tlayer_dependency_present_flag = 0;
   uint32_t multi_tlayer_dependency_map_present_flag = 0;
   uint32_t TLayerDependencyMap[MAX_NUM_MLAYERS][MAX_NUM_TLAYERS][MAX_NUM_TLAYERS] = {};
   uint32_t MLayerDependencyMap[MAX_NUM_MLAYERS][MAX_NUM_MLAYERS] = {};
