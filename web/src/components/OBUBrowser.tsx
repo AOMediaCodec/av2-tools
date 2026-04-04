@@ -254,6 +254,7 @@ export function OBUBrowser({ obus }: OBUBrowserProps) {
                     </table>
                   </div>
 
+                  {obu.position.payload_size > 0 && (
                   <div className="detail-section">
                     <h4>OBU Payload</h4>
                     {Object.keys(obu).some(
@@ -307,6 +308,7 @@ export function OBUBrowser({ obus }: OBUBrowserProps) {
                       </div>
                     )}
                   </div>
+                  )}
                 </div>
               )}
             </div>
