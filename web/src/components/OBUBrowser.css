@@ -72,6 +72,86 @@
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
+/* Temporal Unit Groups */
+.tu-group {
+  margin-bottom: 12px;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.tu-group.tu-config {
+  border-color: #b0bec5;
+}
+
+.tu-group.tu-keyframe {
+  border-color: #9c27b0;
+}
+
+.tu-group-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: #f0f4f8;
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px;
+  border-bottom: 1px solid #d0d0d0;
+}
+
+.tu-group-header:hover {
+  background: #e4eaf0;
+}
+
+.tu-config > .tu-group-header {
+  background: #eceff1;
+}
+
+.tu-config > .tu-group-header:hover {
+  background: #e0e3e6;
+}
+
+.tu-keyframe > .tu-group-header {
+  background: #f3e5f5;
+}
+
+.tu-keyframe > .tu-group-header:hover {
+  background: #e8d5eb;
+}
+
+.tu-label {
+  font-weight: 700;
+  font-family: 'Monaco', 'Courier New', monospace;
+  color: #333;
+  min-width: 60px;
+}
+
+.tu-stats {
+  color: #666;
+  font-size: 12px;
+}
+
+.tu-size {
+  color: #666;
+  font-size: 12px;
+  font-family: 'Monaco', 'Courier New', monospace;
+}
+
+.tu-keyframe-badge {
+  background: #9c27b0;
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+}
+
+.tu-group-obus {
+  padding: 8px;
+}
+
 .obu-list {
   flex: 1;
   overflow-y: auto;

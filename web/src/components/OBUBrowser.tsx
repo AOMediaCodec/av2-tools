@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { JsonHybridViewer } from './JsonHybridViewer';
 import { SpotlightSearch } from './SpotlightSearch';
 import './OBUBrowser.css';
@@ -80,10 +80,72 @@ function MetadataUnitViewer({ unit, label }: { unit: any; label?: string }) {
   );
 }
 
+interface TUGroup {
+  label: string;
+  isConfig: boolean;
+  keyframeType: string | null;  // 'CLK', 'OLK', or null
+  obus: { obu: any; globalIndex: number }[];
+  totalSize: number;
+}
+
+function groupByTemporalUnit(obus: any[]): TUGroup[] {
+  const groups: TUGroup[] = [];
+  let current: { obu: any; globalIndex: number }[] = [];
+  let tuIndex = 0;
+  let seenTD = false;
+
+  const computeGroup = (entries: { obu: any; globalIndex: number }[], label: string, isConfig: boolean): TUGroup => {
+    const clkObu = entries.find(e => e.obu.type_name === 'CLK');
+    const olkObu = entries.find(e => e.obu.type_name === 'OLK');
+    const keyframeType = clkObu ? 'CLK' : olkObu ? 'OLK' : null;
+    const totalSize = entries.reduce(
+      (sum, e) => sum + e.obu.position.size_field_bytes + e.obu.position.header_size + e.obu.position.payload_size,
+      0
+    );
+    return { label, isConfig, keyframeType, obus: entries, totalSize };
+  };
+
+  for (let i = 0; i < obus.length; i++) {
+    if (obus[i].type_name === 'TEMPORAL_DELIMITER') {
+      if (current.length > 0) {
+        if (!seenTD) {
+          groups.push(computeGroup(current, 'Config', true));
+        } else {
+          groups.push(computeGroup(current, `TU ${tuIndex}`, false));
+          tuIndex++;
+        }
+        current = [];
+      }
+      seenTD = true;
+      current.push({ obu: obus[i], globalIndex: i });
+    } else {
+      current.push({ obu: obus[i], globalIndex: i });
+    }
+  }
+
+  if (current.length > 0) {
+    if (!seenTD) {
+      groups.push(computeGroup(current, 'Config', true));
+    } else {
+      groups.push(computeGroup(current, `TU ${tuIndex}`, false));
+    }
+  }
+
+  return groups;
+}
+
 export function OBUBrowser({ obus }: OBUBrowserProps) {
   const [expandedIndices, setExpandedIndices] = useState<Set<number>>(new Set());
+  const [expandedTUs, setExpandedTUs] = useState<Set<number>>(new Set());
   const [isSpotlightOpen, setIsSpotlightOpen] = useState(false);
   const obuRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+
+  const tuGroups = useMemo(() => groupByTemporalUnit(obus), [obus]);
+
+  // Expand all TU groups by default when data changes
+  useEffect(() => {
+    setExpandedTUs(new Set(tuGroups.map((_, i) => i)));
+  }, [tuGroups]);
 
   // Keyboard shortcut for spotlight
   useEffect(() => {
@@ -105,6 +167,14 @@ export function OBUBrowser({ obus }: OBUBrowserProps) {
   }, []);
 
   const handleSpotlightSelect = (obuIndex: number) => {
+    // Expand the TU group containing this OBU
+    for (let gi = 0; gi < tuGroups.length; gi++) {
+      if (tuGroups[gi].obus.some(e => e.globalIndex === obuIndex)) {
+        setExpandedTUs(prev => new Set(prev).add(gi));
+        break;
+      }
+    }
+
     // Expand the selected OBU
     setExpandedIndices((prev) => {
       const next = new Set(prev);
@@ -136,11 +206,25 @@ export function OBUBrowser({ obus }: OBUBrowserProps) {
     });
   };
 
+  const toggleTU = (tuIndex: number) => {
+    setExpandedTUs((prev) => {
+      const next = new Set(prev);
+      if (next.has(tuIndex)) {
+        next.delete(tuIndex);
+      } else {
+        next.add(tuIndex);
+      }
+      return next;
+    });
+  };
+
   const expandAll = () => {
+    setExpandedTUs(new Set(tuGroups.map((_, i) => i)));
     setExpandedIndices(new Set(obus.map((_, i) => i)));
   };
 
   const collapseAll = () => {
+    setExpandedTUs(new Set());
     setExpandedIndices(new Set());
   };
 
@@ -156,6 +240,8 @@ export function OBUBrowser({ obus }: OBUBrowserProps) {
     0
   );
 
+  const tuCount = tuGroups.filter(g => !g.isConfig).length;
+
   return (
     <div className="obu-browser">
       <SpotlightSearch
@@ -170,6 +256,9 @@ export function OBUBrowser({ obus }: OBUBrowserProps) {
         <div className="browser-stats">
           <span className="stat">
             <strong>{obus.length}</strong> OBUs
+          </span>
+          <span className="stat">
+            <strong>{tuCount}</strong> TUs
           </span>
           <span className="stat">
             <strong>{(totalSize / 1024).toFixed(2)}</strong> KB
@@ -192,123 +281,147 @@ export function OBUBrowser({ obus }: OBUBrowserProps) {
       </div>
 
       <div className="obu-list">
-        {obus.map((obu, index) => {
-          const isExpanded = expandedIndices.has(index);
-          const obuTotalSize =
-            obu.position.size_field_bytes + obu.position.header_size + obu.position.payload_size;
+        {tuGroups.map((group, groupIndex) => {
+          const isTUExpanded = expandedTUs.has(groupIndex);
 
           return (
-            <div
-              key={index}
-              ref={(el) => {
-                if (el) obuRefs.current.set(index, el);
-              }}
-              className={`obu-item ${isExpanded ? 'expanded' : ''}`}
-            >
-              <div className="obu-header" onClick={() => toggleExpand(index)}>
-                <span className="expand-icon">{isExpanded ? '▼' : '▶'}</span>
-                <span className="obu-index">#{index}</span>
-                <span className={`obu-type type-${obu.type_name.toLowerCase()}`}>
-                  {obu.type_name}
+            <div key={groupIndex} className={`tu-group ${group.isConfig ? 'tu-config' : ''} ${group.keyframeType ? 'tu-keyframe' : ''}`}>
+              <div className="tu-group-header" onClick={() => toggleTU(groupIndex)}>
+                <span className="expand-icon">{isTUExpanded ? '▼' : '▶'}</span>
+                <span className="tu-label">{group.label}</span>
+                <span className="tu-stats">
+                  {group.obus.length} OBUs
                 </span>
-                <span className="obu-offset">@{obu.position.file_offset}</span>
-                <span className="obu-size">{obuTotalSize} B</span>
-                {obu.header.extension_flag ? (
-                  <span className="obu-layers">
-                    T{obu.header.tlayer_id}/M{obu.header.mlayer_id}/X{obu.header.xlayer_id}
-                  </span>
-                ) : null}
+                <span className="tu-size">
+                  {group.totalSize} B
+                </span>
+                {group.keyframeType && <span className="tu-keyframe-badge">{group.keyframeType}</span>}
               </div>
 
-              {isExpanded && (
-                <div className="obu-details">
-                  <div className="detail-section">
-                    <h4>OBU Header</h4>
-                    <table className="detail-table">
-                      <tbody>
-                        <tr>
-                          <td>OBU Type:</td>
-                          <td>{obu.header.obu_type}</td>
-                        </tr>
-                        <tr>
-                          <td>Extension flag:</td>
-                          <td>{obu.header.extension_flag}</td>
-                        </tr>
-                        {obu.header.extension_flag ? (
-                          <>
-                            <tr>
-                              <td>Temporal layer:</td>
-                              <td>{obu.header.tlayer_id}</td>
-                            </tr>
-                            <tr>
-                              <td>Multi layer:</td>
-                              <td>{obu.header.mlayer_id}</td>
-                            </tr>
-                            <tr>
-                              <td>Cross layer:</td>
-                              <td>{obu.header.xlayer_id}</td>
-                            </tr>
-                          </>
-                        ) : null}
-                      </tbody>
-                    </table>
-                  </div>
+              {isTUExpanded && (
+                <div className="tu-group-obus">
+                  {group.obus.map(({ obu, globalIndex }) => {
+                    const isExpanded = expandedIndices.has(globalIndex);
+                    const obuTotalSize =
+                      obu.position.size_field_bytes + obu.position.header_size + obu.position.payload_size;
 
-                  {obu.position.payload_size > 0 && (
-                  <div className="detail-section">
-                    <h4>OBU Payload</h4>
-                    {Object.keys(obu).some(
-                      (k) => k !== 'type_name' && k !== 'position' && k !== 'header'
-                    ) ? (
-                      <div className="syntax-tree">
-                        {/* Special handling for metadata OBUs with metadata_unit field */}
-                        {obu.metadata_unit ? (
-                          <MetadataUnitViewer unit={obu.metadata_unit} label="Metadata Unit" />
-                        ) : obu.units ? (
-                          /* MetadataGroupOBU with multiple units */
-                          <div>
-                            <div className="metadata-group-info">
-                              <JsonHybridViewer
-                                data={Object.fromEntries(
-                                  Object.entries(obu).filter(
-                                    ([k]) => k !== 'type_name' && k !== 'position' && k !== 'header' && k !== 'units'
-                                  )
-                                )}
-                                defaultExpanded={true}
-                              />
+                    return (
+                      <div
+                        key={globalIndex}
+                        ref={(el) => {
+                          if (el) obuRefs.current.set(globalIndex, el);
+                        }}
+                        className={`obu-item ${isExpanded ? 'expanded' : ''}`}
+                      >
+                        <div className="obu-header" onClick={() => toggleExpand(globalIndex)}>
+                          <span className="expand-icon">{isExpanded ? '▼' : '▶'}</span>
+                          <span className="obu-index">#{globalIndex}</span>
+                          <span className={`obu-type type-${obu.type_name.toLowerCase()}`}>
+                            {obu.type_name}
+                          </span>
+                          <span className="obu-offset">@{obu.position.file_offset}</span>
+                          <span className="obu-size">{obuTotalSize} B</span>
+                          {obu.header.extension_flag ? (
+                            <span className="obu-layers">
+                              T{obu.header.tlayer_id}/M{obu.header.mlayer_id}/X{obu.header.xlayer_id}
+                            </span>
+                          ) : null}
+                        </div>
+
+                        {isExpanded && (
+                          <div className="obu-details">
+                            <div className="detail-section">
+                              <h4>OBU Header</h4>
+                              <table className="detail-table">
+                                <tbody>
+                                  <tr>
+                                    <td>OBU Type:</td>
+                                    <td>{obu.header.obu_type}</td>
+                                  </tr>
+                                  <tr>
+                                    <td>Extension flag:</td>
+                                    <td>{obu.header.extension_flag}</td>
+                                  </tr>
+                                  {obu.header.extension_flag ? (
+                                    <>
+                                      <tr>
+                                        <td>Temporal layer:</td>
+                                        <td>{obu.header.tlayer_id}</td>
+                                      </tr>
+                                      <tr>
+                                        <td>Multi layer:</td>
+                                        <td>{obu.header.mlayer_id}</td>
+                                      </tr>
+                                      <tr>
+                                        <td>Cross layer:</td>
+                                        <td>{obu.header.xlayer_id}</td>
+                                      </tr>
+                                    </>
+                                  ) : null}
+                                </tbody>
+                              </table>
                             </div>
-                            <div className="metadata-units-list">
-                              <h5>Metadata Units ({obu.units.length})</h5>
-                              {obu.units.map((unit: any, idx: number) => (
-                                <MetadataUnitViewer key={idx} unit={unit} label={`Unit ${idx}`} />
-                              ))}
+
+                            {obu.position.payload_size > 0 && (
+                            <div className="detail-section">
+                              <h4>OBU Payload</h4>
+                              {Object.keys(obu).some(
+                                (k) => k !== 'type_name' && k !== 'position' && k !== 'header'
+                              ) ? (
+                                <div className="syntax-tree">
+                                  {/* Special handling for metadata OBUs with metadata_unit field */}
+                                  {obu.metadata_unit ? (
+                                    <MetadataUnitViewer unit={obu.metadata_unit} label="Metadata Unit" />
+                                  ) : obu.units ? (
+                                    /* MetadataGroupOBU with multiple units */
+                                    <div>
+                                      <div className="metadata-group-info">
+                                        <JsonHybridViewer
+                                          data={Object.fromEntries(
+                                            Object.entries(obu).filter(
+                                              ([k]) => k !== 'type_name' && k !== 'position' && k !== 'header' && k !== 'units'
+                                            )
+                                          )}
+                                          defaultExpanded={true}
+                                        />
+                                      </div>
+                                      <div className="metadata-units-list">
+                                        <h5>Metadata Units ({obu.units.length})</h5>
+                                        {obu.units.map((unit: any, idx: number) => (
+                                          <MetadataUnitViewer key={idx} unit={unit} label={`Unit ${idx}`} />
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    /* Regular OBU payload */
+                                    <JsonHybridViewer
+                                      data={Object.fromEntries(
+                                        Object.entries(obu).filter(
+                                          ([k]) => k !== 'type_name' && k !== 'position' && k !== 'header'
+                                        )
+                                      )}
+                                      defaultExpanded={true}
+                                    />
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="payload-not-parsed">
+                                  <span className="not-parsed-icon">⚠️</span>
+                                  <span className="not-parsed-text">
+                                    Payload parsing not yet implemented for this OBU type
+                                  </span>
+                                  <div className="not-parsed-details">
+                                    Payload size: {obu.position.payload_size} bytes
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        ) : (
-                          /* Regular OBU payload */
-                          <JsonHybridViewer
-                            data={Object.fromEntries(
-                              Object.entries(obu).filter(
-                                ([k]) => k !== 'type_name' && k !== 'position' && k !== 'header'
-                              )
                             )}
-                            defaultExpanded={true}
-                          />
+                          </div>
                         )}
                       </div>
-                    ) : (
-                      <div className="payload-not-parsed">
-                        <span className="not-parsed-icon">⚠️</span>
-                        <span className="not-parsed-text">
-                          Payload parsing not yet implemented for this OBU type
-                        </span>
-                        <div className="not-parsed-details">
-                          Payload size: {obu.position.payload_size} bytes
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  )}
+                    );
+                  })}
                 </div>
               )}
             </div>
