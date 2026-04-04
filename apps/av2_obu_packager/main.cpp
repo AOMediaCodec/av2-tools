@@ -50,15 +50,10 @@ int main(int argc, char** argv) {
   // Packaging options
   double frame_rate = 30.0;
   bool drop_tds = true;
-  bool force_td_mode = false;
-  bool force_frame_hack = false;
 
   app.add_option("--fps", frame_rate, "Frame rate (default: 30.0)");
   app.add_flag("--keep-td,!--drop-td", drop_tds,
                "Keep temporal delimiters in samples (default: drop)");
-  app.add_flag("--force-td-mode", force_td_mode, "Force TD-based temporal unit detection");
-  app.add_flag("--force-frame-hack", force_frame_hack,
-               "Force frame-based HACK mode (one frame = one TU)");
 
   CLI11_PARSE(app, argc, argv);
 
@@ -75,18 +70,7 @@ int main(int argc, char** argv) {
   spdlog::info("Phase 1: Parsing bitstream...");
 
   OBUParser parser;
-
-  OBUParser::TemporalUnitOptions tu_opts;
-  if (force_td_mode) {
-    tu_opts.mode = OBUParser::TemporalUnitOptions::Mode::kTemporalDelimiter;
-  } else if (force_frame_hack) {
-    tu_opts.mode = OBUParser::TemporalUnitOptions::Mode::kFrameHeuristic;
-  } else {
-    tu_opts.mode = OBUParser::TemporalUnitOptions::Mode::kAuto;
-  }
-  tu_opts.include_temporal_delimiters = !drop_tds;
-
-  parser.set_temporal_unit_options(tu_opts);
+  parser.set_include_temporal_delimiters(!drop_tds);
 
   if (!parser.parse_file(input)) {
     spdlog::error("Failed to parse bitstream");
@@ -107,7 +91,7 @@ int main(int argc, char** argv) {
   spdlog::info("  Total bytes: {}", stats.total_bytes);
   spdlog::info("  Sequence headers: {}{}", stats.sequence_headers.count,
                stats.sequence_headers.has_changes ? " (with changes)" : "(identical)");
-  spdlog::info("  Temporal delimiters: {}", stats.temporal.has_temporal_delimiters ? "yes" : "no");
+  spdlog::info("  Temporal delimiter count: {}", stats.temporal.td_count);
   spdlog::info("  Frames: {} ({} keyframes)", stats.frames.total_frames,
                stats.frames.keyframe_count);
   spdlog::info("  Single layer: {}", stats.layers.is_single_layer ? "yes" : "no");

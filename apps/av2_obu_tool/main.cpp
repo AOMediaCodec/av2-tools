@@ -121,7 +121,6 @@ int main(int argc, char** argv) {
       j["sequence_headers"]["change_positions"] = stats.sequence_headers.change_positions;
 
       // Temporal structure
-      j["temporal"]["has_temporal_delimiters"] = stats.temporal.has_temporal_delimiters;
       j["temporal"]["td_count"] = stats.temporal.td_count;
 
       // Frames
@@ -181,11 +180,7 @@ int main(int argc, char** argv) {
       }
 
       std::cout << "\nTemporal Structure:" << std::endl;
-      std::cout << "  Has temporal delimiters: "
-                << (stats.temporal.has_temporal_delimiters ? "yes" : "no") << std::endl;
-      if (stats.temporal.has_temporal_delimiters) {
-        std::cout << "  TD count: " << stats.temporal.td_count << std::endl;
-      }
+      std::cout << "  TD count: " << stats.temporal.td_count << std::endl;
 
       std::cout << "\nFrames:" << std::endl;
       std::cout << "  Total frames: " << stats.frames.total_frames << std::endl;

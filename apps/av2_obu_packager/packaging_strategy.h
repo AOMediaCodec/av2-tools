@@ -23,15 +23,6 @@ struct PackagingStrategy {
   };
   SampleEntryMode sample_entry_mode = SampleEntryMode::kSingle;
 
-  enum class TemporalUnitMode {
-    kTDBased,         // Use temporal delimiter OBU boundaries (proper when TDs present)
-    kOrderHintBased,  // Parse order_hint from frame headers (TODO: not yet implemented)
-
-    // HACK for initial demo (not proper AV2 temporal units):
-    kFrameBased  // Treat each frame OBU as separate TU (temporary simplification)
-  };
-  TemporalUnitMode temporal_unit_mode = TemporalUnitMode::kFrameBased;
-
   bool drop_temporal_delimiters = true;
 
   // Timing
@@ -43,8 +34,6 @@ struct PackagingStrategy {
 struct UserOptions {
   double frame_rate = 30.0;
   bool drop_temporal_delimiters = true;
-  bool force_td_mode = false;     // Override auto-detection to use TD mode
-  bool force_frame_hack = false;  // Force simple frame-based hack mode
 };
 
 // Determines packaging strategy from bitstream statistics and user options

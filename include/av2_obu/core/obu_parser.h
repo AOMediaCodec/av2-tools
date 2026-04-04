@@ -45,15 +45,9 @@ public:
   size_t temporal_unit_count() const { return temporal_units_.size(); }
   const TemporalUnit& temporal_unit(size_t index) const { return temporal_units_[index]; }
 
-  // Configure temporal unit detection
-  struct TemporalUnitOptions {
-    enum class Mode { kAuto, kTemporalDelimiter, kOrderHint, kFrameHeuristic };
-    Mode mode = Mode::kAuto;
-    bool include_temporal_delimiters = true;
-  };
-
-  void set_temporal_unit_options(const TemporalUnitOptions& opts) { tu_options_ = opts; }
-  const TemporalUnitOptions& temporal_unit_options() const { return tu_options_; }
+  // Configure whether TD OBUs are included in temporal unit lists
+  void set_include_temporal_delimiters(bool include) { include_temporal_delimiters_ = include; }
+  bool include_temporal_delimiters() const { return include_temporal_delimiters_; }
 
   // Export all OBUs to JSON
   json to_json() const;
@@ -84,7 +78,6 @@ public:
 
     // Temporal structure
     struct TemporalInfo {
-      bool has_temporal_delimiters = false;
       size_t td_count = 0;
     } temporal;
 
@@ -128,14 +121,12 @@ private:
   uint32_t read_annex_b_size(std::ifstream& ifs, uint32_t& value);
 
   void build_temporal_units();
-  void build_tus_td_based();
-  void build_tus_frame_based();
   bool is_config_obu(const BaseOBU* obu) const;
 
   std::string current_file_;
   std::vector<std::unique_ptr<BaseOBU>> obus_;
   std::vector<TemporalUnit> temporal_units_;
-  TemporalUnitOptions tu_options_;
+  bool include_temporal_delimiters_ = false;
 };
 
 }  // namespace av2_obu

@@ -38,23 +38,7 @@ size_t TemporalUnit::get_total_size() const {
 std::vector<TemporalUnit> TemporalUnitBuilder::build(
   const std::vector<std::unique_ptr<BaseOBU>>& obus, const PackagingStrategy& strategy) {
   spdlog::debug("Building temporal units from {} OBUs", obus.size());
-
-  switch (strategy.temporal_unit_mode) {
-    case PackagingStrategy::TemporalUnitMode::kTDBased:
-      return build_td_based(obus, strategy.drop_temporal_delimiters);
-
-    case PackagingStrategy::TemporalUnitMode::kFrameBased:
-      return build_frame_based(obus, strategy.drop_temporal_delimiters);
-
-    case PackagingStrategy::TemporalUnitMode::kOrderHintBased:
-      spdlog::error("order_hint-based TU building not yet implemented!");
-      // Fall back to frame-based hack
-      return build_frame_based(obus, strategy.drop_temporal_delimiters);
-
-    default:
-      spdlog::error("Unknown temporal unit mode!");
-      return {};
-  }
+  return build_td_based(obus, strategy.drop_temporal_delimiters);
 }
 
 std::vector<TemporalUnit> TemporalUnitBuilder::build_td_based(
@@ -102,55 +86,6 @@ std::vector<TemporalUnit> TemporalUnitBuilder::build_td_based(
 
   spdlog::info("Built {} temporal units (TD-based)", temporal_units.size());
   return temporal_units;
-}
-
-std::vector<TemporalUnit> TemporalUnitBuilder::build_frame_based(
-  const std::vector<std::unique_ptr<BaseOBU>>& obus, bool drop_tds) {
-  spdlog::debug("Building TUs using frame-based HACK (one frame = one TU)");
-
-  std::vector<TemporalUnit> temporal_units;
-  TemporalUnit current_tu;
-
-  for (const auto& obu : obus) {
-    // Skip config OBUs
-    if (obu->type() == OBUType::SEQUENCE_HEADER ||
-        obu->type() == OBUType::LAYER_CONFIGURATION_RECORD ||
-        obu->type() == OBUType::OPERATING_POINT_SET) {
-      continue;
-    }
-
-    // Skip TDs if dropping
-    if (obu->type() == OBUType::TEMPORAL_DELIMITER && drop_tds) {
-      continue;
-    }
-
-    // If this is a frame OBU and we already have OBUs, finalize previous TU
-    if (is_frame_obu(obu.get()) && !current_tu.empty()) {
-      spdlog::debug("  TU #{}: {} OBUs, {} bytes, keyframe: {}", temporal_units.size(),
-                    current_tu.obu_count(), current_tu.get_total_size(), current_tu.is_keyframe());
-      temporal_units.push_back(std::move(current_tu));
-      current_tu = TemporalUnit();
-    }
-
-    // Add OBU to current TU
-    current_tu.add_obu(obu.get());
-  }
-
-  // Finalize last TU
-  if (!current_tu.empty()) {
-    spdlog::debug("  TU #{}: {} OBUs, {} bytes, keyframe: {}", temporal_units.size(),
-                  current_tu.obu_count(), current_tu.get_total_size(), current_tu.is_keyframe());
-    temporal_units.push_back(std::move(current_tu));
-  }
-
-  spdlog::info("Built {} temporal units (frame-based HACK)", temporal_units.size());
-  return temporal_units;
-}
-
-bool TemporalUnitBuilder::is_frame_obu(const BaseOBU* obu) const {
-  auto type = obu->type();
-  return type == OBUType::CLK || type == OBUType::OLK || type == OBUType::REGULAR_TILE_GROUP ||
-         type == OBUType::LEADING_TILE_GROUP;
 }
 
 bool TemporalUnitBuilder::should_include_in_sample(const BaseOBU* obu,

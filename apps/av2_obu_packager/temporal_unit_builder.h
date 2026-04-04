@@ -50,13 +50,6 @@ private:
   std::vector<TemporalUnit> build_td_based(const std::vector<std::unique_ptr<BaseOBU>>& obus,
                                            bool drop_tds);
 
-  // Build using simple frame-based hack (one frame = one TU)
-  std::vector<TemporalUnit> build_frame_based(const std::vector<std::unique_ptr<BaseOBU>>& obus,
-                                              bool drop_tds);
-
-  // Helper: check if OBU is a frame type
-  bool is_frame_obu(const BaseOBU* obu) const;
-
   // Helper: check if OBU should be included in samples
   bool should_include_in_sample(const BaseOBU* obu, const PackagingStrategy& strategy) const;
 };
