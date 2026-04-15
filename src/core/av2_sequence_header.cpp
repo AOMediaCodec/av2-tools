@@ -253,7 +253,7 @@ bool SequenceInterConfig::parse(BitstreamReader& br, bool single_picture_header_
       reduced_ref_frame_mvs_mode = 0;
     }
 
-    order_hint_bits_minus_1 = br.read_bits(3);
+    order_hint_bits_minus_1 = br.read_bits(4);
     OrderHintBits = order_hint_bits_minus_1 + 1;
 
     enable_refmvbank = br.read_bit();
