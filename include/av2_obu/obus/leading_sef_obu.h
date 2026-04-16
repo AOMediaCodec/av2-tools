@@ -12,10 +12,13 @@
 #pragma once
 
 #include <av2_obu/core/base_obu.h>
+#include <av2_obu/core/frame_header_info.h>
 
 namespace av2_obu {
 
-// Leading SEF OBU
+// Leading Show Existing Frame OBU (OBU_LEADING_SEF)
+// A SEF that appears before the associated key frame in display order.
+// Same parsing as REGULAR_SEF.
 class LeadingSEFOBU : public BaseOBU {
 public:
   explicit LeadingSEFOBU(const OBUPosition& pos) : BaseOBU(pos) {}
@@ -23,8 +26,13 @@ public:
   json to_json() const override;
   std::string type_name() const override { return "LEADING_SEF"; }
 
+  const FrameHeaderInfo& frame_header() const { return frame_header_; }
+
 protected:
   bool parse_payload(std::ifstream& ifs) override;
+
+private:
+  FrameHeaderInfo frame_header_;
 };
 
 }  // namespace av2_obu

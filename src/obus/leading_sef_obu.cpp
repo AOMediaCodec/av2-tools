@@ -11,6 +11,8 @@
 
 #include <spdlog/spdlog.h>
 
+#include <av2_obu/core/av2_sequence_header.h>
+#include <av2_obu/core/bitstream_reader.h>
 #include <av2_obu/obus/leading_sef_obu.h>
 
 namespace av2_obu {
@@ -18,22 +20,34 @@ namespace av2_obu {
 bool LeadingSEFOBU::parse_payload(std::ifstream& ifs) {
   spdlog::debug("Parsing LEADING_SEF payload ({} bytes)", position_.payload_size);
 
-  // Read raw payload
   raw_payload_.resize(position_.payload_size);
   if (!ifs.read(reinterpret_cast<char*>(raw_payload_.data()), position_.payload_size)) {
     spdlog::error("Failed to read LEADING_SEF payload");
     return false;
   }
 
-  // TODO: Implement LEADING_SEF parsing
-  spdlog::warn("LEADING_SEF parsing not yet implemented");
+  if (active_seq_header_) {
+    BitstreamReader br(raw_payload_);
+    if (!frame_header_.parse_lightweight(br, OBUType::LEADING_SEF, *active_seq_header_)) {
+      spdlog::error("Failed to parse LEADING_SEF frame header");
+      return false;
+    }
+    spdlog::debug("LEADING_SEF: show_ref={}, order_hint={}, derive_sef_oh={}",
+                  frame_header_.frame_to_show_map_idx, frame_header_.order_hint,
+                  frame_header_.derive_sef_order_hint);
+  } else {
+    spdlog::warn("LEADING_SEF: no active sequence header — frame header not parsed");
+  }
+
   return true;
 }
 
 json LeadingSEFOBU::to_json() const {
   json j = BaseOBU::to_json();
   j["type_name"] = "LEADING_SEF";
-  // TODO: Add LEADING_SEF-specific fields
+  if (frame_header_.parsed) {
+    j["frame_header"] = frame_header_.to_json();
+  }
   return j;
 }
 

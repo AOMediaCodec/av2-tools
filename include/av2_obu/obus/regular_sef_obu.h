@@ -12,10 +12,13 @@
 #pragma once
 
 #include <av2_obu/core/base_obu.h>
+#include <av2_obu/core/frame_header_info.h>
 
 namespace av2_obu {
 
-// Regular SEF OBU
+// Regular Show Existing Frame OBU (OBU_REGULAR_SEF)
+// Re-outputs a previously decoded frame from a reference buffer.
+// No new decode data — just frame_to_show_map_idx and order_hint.
 class RegularSEFOBU : public BaseOBU {
 public:
   explicit RegularSEFOBU(const OBUPosition& pos) : BaseOBU(pos) {}
@@ -23,8 +26,13 @@ public:
   json to_json() const override;
   std::string type_name() const override { return "REGULAR_SEF"; }
 
+  const FrameHeaderInfo& frame_header() const { return frame_header_; }
+
 protected:
   bool parse_payload(std::ifstream& ifs) override;
+
+private:
+  FrameHeaderInfo frame_header_;
 };
 
 }  // namespace av2_obu
