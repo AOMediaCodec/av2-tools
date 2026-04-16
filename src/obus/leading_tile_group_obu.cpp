@@ -11,6 +11,8 @@
 
 #include <spdlog/spdlog.h>
 
+#include <av2_obu/core/av2_sequence_header.h>
+#include <av2_obu/core/bitstream_reader.h>
 #include <av2_obu/obus/leading_tile_group_obu.h>
 
 namespace av2_obu {
@@ -18,22 +20,44 @@ namespace av2_obu {
 bool LeadingTileGroupOBU::parse_payload(std::ifstream& ifs) {
   spdlog::debug("Parsing LEADING_TILE_GROUP payload ({} bytes)", position_.payload_size);
 
-  // Read raw payload
   raw_payload_.resize(position_.payload_size);
   if (!ifs.read(reinterpret_cast<char*>(raw_payload_.data()), position_.payload_size)) {
     spdlog::error("Failed to read LEADING_TILE_GROUP payload");
     return false;
   }
 
-  // TODO: Implement LEADING_TILE_GROUP parsing
-  spdlog::warn("LEADING_TILE_GROUP parsing not yet implemented");
+  if (active_seq_header_) {
+    BitstreamReader br(raw_payload_);
+    if (!tile_group_header_.parse_lightweight(br, OBUType::LEADING_TILE_GROUP,
+                                              *active_seq_header_)) {
+      spdlog::error("Failed to parse LEADING_TILE_GROUP tile group header");
+      return false;
+    }
+    if (tile_group_header_.frame_header.parsed) {
+      spdlog::debug("LEADING_TILE_GROUP: order_hint={}, type={}, refresh_flags=0x{:02x}",
+                    tile_group_header_.frame_header.order_hint,
+                    tile_group_header_.frame_header.FrameType,
+                    tile_group_header_.frame_header.refresh_frame_flags);
+    }
+
+    if (parse_mode() == ParseMode::kDeep) {
+      tile_group_header_.frame_header.parse_deep(br, OBUType::LEADING_TILE_GROUP,
+                                                 *active_seq_header_);
+      tile_group_header_.parse_deep(br, OBUType::LEADING_TILE_GROUP, *active_seq_header_);
+    }
+  } else {
+    spdlog::warn("LEADING_TILE_GROUP: no active sequence header — frame header not parsed");
+  }
+
   return true;
 }
 
 json LeadingTileGroupOBU::to_json() const {
   json j = BaseOBU::to_json();
   j["type_name"] = "LEADING_TILE_GROUP";
-  // TODO: Add LEADING_TILE_GROUP-specific fields
+  if (tile_group_header_.frame_header.parsed) {
+    j["tile_group"] = tile_group_header_.to_json();
+  }
   return j;
 }
 

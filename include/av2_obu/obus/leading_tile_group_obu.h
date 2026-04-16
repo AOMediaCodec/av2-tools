@@ -12,10 +12,12 @@
 #pragma once
 
 #include <av2_obu/core/base_obu.h>
+#include <av2_obu/core/tile_group_header.h>
 
 namespace av2_obu {
 
-// Leading Tile Group OBU
+// Leading Tile Group OBU (OBU_LEADING_TILE_GROUP)
+// Uses tile_group_obu() syntax, same as REGULAR_TILE_GROUP.
 class LeadingTileGroupOBU : public BaseOBU {
 public:
   explicit LeadingTileGroupOBU(const OBUPosition& pos) : BaseOBU(pos) {}
@@ -23,8 +25,14 @@ public:
   json to_json() const override;
   std::string type_name() const override { return "LEADING_TILE_GROUP"; }
 
+  const TileGroupHeader& tile_group_header() const { return tile_group_header_; }
+  const FrameHeaderInfo& frame_header() const { return tile_group_header_.frame_header; }
+
 protected:
   bool parse_payload(std::ifstream& ifs) override;
+
+private:
+  TileGroupHeader tile_group_header_;
 };
 
 }  // namespace av2_obu

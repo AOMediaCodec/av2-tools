@@ -12,10 +12,14 @@
 #pragma once
 
 #include <av2_obu/core/base_obu.h>
+#include <av2_obu/core/tile_group_header.h>
 
 namespace av2_obu {
 
-// Regular Tile Group OBU
+// Regular Tile Group OBU (OBU_REGULAR_TILE_GROUP)
+// Contains inter or intra-only coded frame data. The frame_is_inter bit
+// in the frame header determines whether this is INTER_FRAME or INTRA_ONLY_FRAME.
+// Uses tile_group_obu() syntax.
 class RegularTileGroupOBU : public BaseOBU {
 public:
   explicit RegularTileGroupOBU(const OBUPosition& pos) : BaseOBU(pos) {}
@@ -23,8 +27,14 @@ public:
   json to_json() const override;
   std::string type_name() const override { return "REGULAR_TILE_GROUP"; }
 
+  const TileGroupHeader& tile_group_header() const { return tile_group_header_; }
+  const FrameHeaderInfo& frame_header() const { return tile_group_header_.frame_header; }
+
 protected:
   bool parse_payload(std::ifstream& ifs) override;
+
+private:
+  TileGroupHeader tile_group_header_;
 };
 
 }  // namespace av2_obu
