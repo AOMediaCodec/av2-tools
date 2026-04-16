@@ -110,7 +110,7 @@ bool OBUParser::scan_file(std::ifstream& ifs) {
                   pos.payload_size);
 
     // Create OBU object
-    auto obu = BaseOBU::create(ifs, pos);
+    auto obu = BaseOBU::create(ifs, pos, parse_mode_);
     if (!obu) {
       spdlog::error("Failed to create OBU at position {}", static_cast<long long>(record_begin));
       return false;

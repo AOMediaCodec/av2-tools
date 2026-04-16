@@ -29,6 +29,12 @@ spdlog::level::level_enum get_log_level();
 
 // ========== ENUMS ==========
 
+// Parse mode for OBU parsing depth
+enum class ParseMode : uint8_t {
+  kLightweight = 0,  // HLS only (packaging related stuff)
+  kDeep = 1          // For analysis: every syntax element
+};
+
 // OBU Types - Latest AV2 specification
 // Enum values match AVM with experimental macros enabled
 enum class OBUType : uint32_t {

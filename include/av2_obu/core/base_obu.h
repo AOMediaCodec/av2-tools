@@ -79,7 +79,8 @@ public:
   virtual ~BaseOBU() = default;
 
   // Factory method to create appropriate OBU type
-  static std::unique_ptr<BaseOBU> create(std::ifstream& ifs, const OBUPosition& pos);
+  static std::unique_ptr<BaseOBU> create(std::ifstream& ifs, const OBUPosition& pos,
+                                         ParseMode mode = ParseMode::kDeep);
 
   // Parse the OBU (header + payload)
   // Returns true on success, false on error
@@ -93,6 +94,8 @@ public:
   const OBUPosition& position() const { return position_; }
   OBUType type() const { return header_.get_obu_type(); }
   const std::vector<uint8_t>& raw_payload() const { return raw_payload_; }
+  ParseMode parse_mode() const { return parse_mode_; }
+  void set_parse_mode(ParseMode mode) { parse_mode_ = mode; }
 
   // Type name for logging/display
   virtual std::string type_name() const;
@@ -109,6 +112,7 @@ protected:
 
   OBUHeader header_;
   OBUPosition position_;
+  ParseMode parse_mode_ = ParseMode::kDeep;
   std::vector<uint8_t> raw_payload_;  // Store raw bytes if needed
 };
 

@@ -49,6 +49,10 @@ public:
   void set_include_temporal_delimiters(bool include) { include_temporal_delimiters_ = include; }
   bool include_temporal_delimiters() const { return include_temporal_delimiters_; }
 
+  // Configure parse mode (HLS only vs deep analysis)
+  void set_parse_mode(ParseMode mode) { parse_mode_ = mode; }
+  ParseMode parse_mode() const { return parse_mode_; }
+
   // Export all OBUs to JSON
   json to_json() const;
 
@@ -126,6 +130,7 @@ private:
   std::string current_file_;
   std::vector<std::unique_ptr<BaseOBU>> obus_;
   std::vector<TemporalUnit> temporal_units_;
+  ParseMode parse_mode_ = ParseMode::kDeep;
   bool include_temporal_delimiters_ = false;
 };
 
