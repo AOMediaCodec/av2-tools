@@ -15,12 +15,15 @@
 // This is a convenience header that includes all public API headers
 
 // Core infrastructure
+#include <av2_obu/core/av2_math.h>
 #include <av2_obu/core/av2_sequence_header.h>
 #include <av2_obu/core/av2_types.h>
 #include <av2_obu/core/base_obu.h>
 #include <av2_obu/core/bitstream_reader.h>
+#include <av2_obu/core/frame_header_info.h>
 #include <av2_obu/core/obu_parser.h>
 #include <av2_obu/core/temporal_unit.h>
+#include <av2_obu/core/tile_group_header.h>
 
 // OBU implementations
 #include <av2_obu/obus/atlas_segment_obu.h>

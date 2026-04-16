@@ -16,6 +16,7 @@
 #include <iostream>
 
 #include <av2_obu/core/obu_parser.h>
+#include <av2_obu/obus/sequence_header_obu.h>
 
 namespace av2_obu {
 
@@ -36,6 +37,7 @@ bool OBUParser::parse_file(const std::string& filename) {
   // Clear previous state
   obus_.clear();
   temporal_units_.clear();
+  active_sequence_header_ = nullptr;
   current_file_ = filename;
 
   // Scan the file
@@ -110,10 +112,19 @@ bool OBUParser::scan_file(std::ifstream& ifs) {
                   pos.payload_size);
 
     // Create OBU object
-    auto obu = BaseOBU::create(ifs, pos, parse_mode_);
+    auto obu = BaseOBU::create(ifs, pos, parse_mode_, active_sequence_header_);
     if (!obu) {
       spdlog::error("Failed to create OBU at position {}", static_cast<long long>(record_begin));
       return false;
+    }
+
+    // Track active sequence header for subsequent OBUs
+    if (obu->type() == OBUType::SEQUENCE_HEADER) {
+      auto* sh_obu = dynamic_cast<const SequenceHeaderOBU*>(obu.get());
+      if (sh_obu) {
+        // TODO: Handle multiple sequence headers and changes (currently just tracks the last one)
+        active_sequence_header_ = &sh_obu->sequence_header();
+      }
     }
 
     obus_.push_back(std::move(obu));

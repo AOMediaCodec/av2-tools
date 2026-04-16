@@ -104,8 +104,8 @@ json OBUHeader::to_json() const {
 
 // ==================== BaseOBU ====================
 
-std::unique_ptr<BaseOBU> BaseOBU::create(std::ifstream& ifs, const OBUPosition& pos,
-                                         ParseMode mode) {
+std::unique_ptr<BaseOBU> BaseOBU::create(std::ifstream& ifs, const OBUPosition& pos, ParseMode mode,
+                                         const AV2SequenceHeader* seq_header) {
   spdlog::debug("Creating OBU at position {}", static_cast<long long>(pos.start_pos));
 
   std::unique_ptr<BaseOBU> obu;
@@ -204,8 +204,9 @@ std::unique_ptr<BaseOBU> BaseOBU::create(std::ifstream& ifs, const OBUPosition& 
       break;
   }
 
-  // Set parse mode and parse the OBU
+  // Set parse mode and active sequence header, then parse the OBU
   obu->set_parse_mode(mode);
+  obu->set_active_sequence_header(seq_header);
   ifs.seekg(pos.header_pos);
   if (!obu->parse(ifs)) {
     spdlog::error("Failed to parse {} at position {}", to_string(type),

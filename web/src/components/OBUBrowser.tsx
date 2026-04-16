@@ -345,15 +345,15 @@ export function OBUBrowser({ obus }: OBUBrowserProps) {
                                   {obu.header.extension_flag ? (
                                     <>
                                       <tr>
-                                        <td>Temporal layer:</td>
+                                        <td>obu_tlayer_id:</td>
                                         <td>{obu.header.tlayer_id}</td>
                                       </tr>
                                       <tr>
-                                        <td>Multi layer:</td>
+                                        <td>obu_mlayer_id:</td>
                                         <td>{obu.header.mlayer_id}</td>
                                       </tr>
                                       <tr>
-                                        <td>Cross layer:</td>
+                                        <td>obu_xlayer_id:</td>
                                         <td>{obu.header.xlayer_id}</td>
                                       </tr>
                                     </>

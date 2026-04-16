@@ -188,17 +188,17 @@ int main(int argc, char** argv) {
 
       std::cout << "\nLayers:" << std::endl;
       std::cout << "  Single layer: " << (stats.layers.is_single_layer ? "yes" : "no") << std::endl;
-      std::cout << "  Spatial layers (mlayer): ";
+      std::cout << "  obu_mlayer_id: ";
       for (auto id : stats.layers.mlayer_ids) {
         std::cout << (int)id << " ";
       }
       std::cout << std::endl;
-      std::cout << "  Quality layers (xlayer): ";
+      std::cout << "  obu_xlayer_id: ";
       for (auto id : stats.layers.xlayer_ids) {
         std::cout << (int)id << " ";
       }
       std::cout << std::endl;
-      std::cout << "  Temporal layers (tlayer): ";
+      std::cout << "  obu_tlayer_id: ";
       for (auto id : stats.layers.tlayer_ids) {
         std::cout << (int)id << " ";
       }

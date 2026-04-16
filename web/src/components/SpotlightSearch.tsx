@@ -257,15 +257,15 @@ export function SpotlightSearch({ isOpen, onClose, obus, onSelectResult }: Spotl
               </div>
               <div className="spotlight-tip">
                 <code>t:0</code>
-                <span>Temporal layer 0</span>
+                <span>obu_tlayer_id 0</span>
               </div>
               <div className="spotlight-tip">
                 <code>m:0</code>
-                <span>Multi layer 0</span>
+                <span>obu_mlayer_id 0</span>
               </div>
               <div className="spotlight-tip">
                 <code>x:0</code>
-                <span>Cross layer 0</span>
+                <span>obu_xlayer_id 0</span>
               </div>
               <div className="spotlight-tip">
                 <code>#5</code>

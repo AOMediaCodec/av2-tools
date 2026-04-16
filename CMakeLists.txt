@@ -46,6 +46,8 @@ target_sources(av2_obu
     src/core/av2_sequence_header.cpp
     src/core/av2_types.cpp
     src/core/temporal_unit.cpp
+    src/core/frame_header_info.cpp
+    src/core/tile_group_header.cpp
 
     # Specific OBU implementations
     src/obus/sequence_header_obu.cpp

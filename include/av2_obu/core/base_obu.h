@@ -73,6 +73,9 @@ private:
   uint32_t obu_extension_flag_ = 0;
 };
 
+// Forward declaration
+struct AV2SequenceHeader;
+
 // Base class for all OBUs
 class BaseOBU {
 public:
@@ -80,7 +83,8 @@ public:
 
   // Factory method to create appropriate OBU type
   static std::unique_ptr<BaseOBU> create(std::ifstream& ifs, const OBUPosition& pos,
-                                         ParseMode mode = ParseMode::kDeep);
+                                         ParseMode mode = ParseMode::kDeep,
+                                         const AV2SequenceHeader* seq_header = nullptr);
 
   // Parse the OBU (header + payload)
   // Returns true on success, false on error
@@ -96,6 +100,8 @@ public:
   const std::vector<uint8_t>& raw_payload() const { return raw_payload_; }
   ParseMode parse_mode() const { return parse_mode_; }
   void set_parse_mode(ParseMode mode) { parse_mode_ = mode; }
+  const AV2SequenceHeader* active_sequence_header() const { return active_seq_header_; }
+  void set_active_sequence_header(const AV2SequenceHeader* sh) { active_seq_header_ = sh; }
 
   // Type name for logging/display
   virtual std::string type_name() const;
@@ -113,6 +119,7 @@ protected:
   OBUHeader header_;
   OBUPosition position_;
   ParseMode parse_mode_ = ParseMode::kDeep;
+  const AV2SequenceHeader* active_seq_header_ = nullptr;
   std::vector<uint8_t> raw_payload_;  // Store raw bytes if needed
 };
 

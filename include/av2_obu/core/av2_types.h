@@ -17,6 +17,8 @@
 #include <map>
 #include <string>
 
+#include <av2_obu/core/av2_math.h>
+
 namespace av2_obu {
 
 // ========== LOGGING CONTROL ==========
@@ -198,7 +200,47 @@ MetadataType to_metadata_type(uint32_t value);
 std::ostream& operator<<(std::ostream& os, MetadataType type);
 bool is_valid_metadata_type(uint32_t value);
 
+// OBU type classification helpers (matching AV2 spec helper functions)
+inline bool is_sef(OBUType type) {
+  return type == OBUType::LEADING_SEF || type == OBUType::REGULAR_SEF;
+}
+
+inline bool is_tip_frame(OBUType type) {
+  return type == OBUType::LEADING_TIP || type == OBUType::REGULAR_TIP;
+}
+
+inline bool is_tile_group(OBUType type) {
+  return type == OBUType::LEADING_TILE_GROUP || type == OBUType::REGULAR_TILE_GROUP ||
+         type == OBUType::CLK || type == OBUType::OLK || type == OBUType::SWITCH ||
+         type == OBUType::RAS_FRAME;
+}
+
+inline bool is_key_frame_obu(OBUType type) {
+  return type == OBUType::CLK || type == OBUType::OLK;
+}
+
+inline bool is_regular_obu(OBUType type) {
+  return type == OBUType::OLK || type == OBUType::REGULAR_TILE_GROUP ||
+         type == OBUType::REGULAR_TIP || type == OBUType::REGULAR_SEF ||
+         type == OBUType::SWITCH || type == OBUType::RAS_FRAME || type == OBUType::BRIDGE_FRAME;
+}
+
 // ========== CONSTANTS ==========
+
+// Frame types
+constexpr uint32_t KEY_FRAME = 0;
+constexpr uint32_t INTER_FRAME = 1;
+constexpr uint32_t INTRA_ONLY_FRAME = 2;
+constexpr uint32_t SWITCH_FRAME = 3;
+
+// Primary reference
+constexpr uint32_t PRIMARY_REF_NONE = 7;
+constexpr uint32_t PRIMARY_REF_CHOOSE = 7;  // Alias: let decoder choose
+
+// TIP frame modes
+constexpr uint32_t TIP_FRAME_DISABLED = 0;
+constexpr uint32_t TIP_FRAME_AS_REF = 1;
+constexpr uint32_t TIP_FRAME_AS_OUTPUT = 2;
 
 // Motion modes
 constexpr uint32_t MOTION_MODES = 5;

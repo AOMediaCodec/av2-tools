@@ -131,6 +131,7 @@ private:
   std::vector<std::unique_ptr<BaseOBU>> obus_;
   std::vector<TemporalUnit> temporal_units_;
   ParseMode parse_mode_ = ParseMode::kDeep;
+  const AV2SequenceHeader* active_sequence_header_ = nullptr;
   bool include_temporal_delimiters_ = false;
 };
 
