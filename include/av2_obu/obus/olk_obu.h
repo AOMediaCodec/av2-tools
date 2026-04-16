@@ -12,10 +12,15 @@
 #pragma once
 
 #include <av2_obu/core/base_obu.h>
+#include <av2_obu/core/tile_group_header.h>
 
 namespace av2_obu {
 
-// Output Layer Key OBU (CONFIG_F024_KEYOBU)
+// Open Loop Key OBU (OBU_OPEN_LOOP_KEY)
+// A coded frame with obu_type equal to OBU_OPEN_LOOP_KEY.
+// Uses tile_group_obu() syntax which embeds frame_header_info().
+// Unlike CLK, OLK does not invalidate reference buffers and sets
+// immediate_output_frame = 0 (output is deferred).
 class OLKOBU : public BaseOBU {
 public:
   explicit OLKOBU(const OBUPosition& pos) : BaseOBU(pos) {}
@@ -23,8 +28,15 @@ public:
   json to_json() const override;
   std::string type_name() const override { return "OLK"; }
 
+  // Access parsed tile group header (includes frame header)
+  const TileGroupHeader& tile_group_header() const { return tile_group_header_; }
+  const FrameHeaderInfo& frame_header() const { return tile_group_header_.frame_header; }
+
 protected:
   bool parse_payload(std::ifstream& ifs) override;
+
+private:
+  TileGroupHeader tile_group_header_;
 };
 
 }  // namespace av2_obu
