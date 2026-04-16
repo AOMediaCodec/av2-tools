@@ -17,7 +17,6 @@
 namespace av2_obu {
 
 // Leading Tile Group OBU (OBU_LEADING_TILE_GROUP)
-// Uses tile_group_obu() syntax, same as REGULAR_TILE_GROUP.
 class LeadingTileGroupOBU : public BaseOBU {
 public:
   explicit LeadingTileGroupOBU(const OBUPosition& pos) : BaseOBU(pos) {}

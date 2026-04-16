@@ -16,7 +16,6 @@
 namespace av2_obu {
 
 // Multi-frame header OBU (AV2)
-// CONFIG_MULTI_FRAME_HEADER feature
 class MultiFrameHeaderOBU : public BaseOBU {
 public:
   explicit MultiFrameHeaderOBU(const OBUPosition& pos) : BaseOBU(pos) {}

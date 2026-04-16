@@ -17,9 +17,6 @@
 namespace av2_obu {
 
 // Regular Tile Group OBU (OBU_REGULAR_TILE_GROUP)
-// Contains inter or intra-only coded frame data. The frame_is_inter bit
-// in the frame header determines whether this is INTER_FRAME or INTRA_ONLY_FRAME.
-// Uses tile_group_obu() syntax.
 class RegularTileGroupOBU : public BaseOBU {
 public:
   explicit RegularTileGroupOBU(const OBUPosition& pos) : BaseOBU(pos) {}

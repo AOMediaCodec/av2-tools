@@ -12,10 +12,11 @@
 #pragma once
 
 #include <av2_obu/core/base_obu.h>
+#include <av2_obu/core/tile_group_header.h>
 
 namespace av2_obu {
 
-// Switch OBU
+// Switch OBU (OBU_SWITCH)
 class SwitchOBU : public BaseOBU {
 public:
   explicit SwitchOBU(const OBUPosition& pos) : BaseOBU(pos) {}
@@ -23,8 +24,14 @@ public:
   json to_json() const override;
   std::string type_name() const override { return "SWITCH"; }
 
+  const TileGroupHeader& tile_group_header() const { return tile_group_header_; }
+  const FrameHeaderInfo& frame_header() const { return tile_group_header_.frame_header; }
+
 protected:
   bool parse_payload(std::ifstream& ifs) override;
+
+private:
+  TileGroupHeader tile_group_header_;
 };
 
 }  // namespace av2_obu

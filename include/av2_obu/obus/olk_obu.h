@@ -17,10 +17,6 @@
 namespace av2_obu {
 
 // Open Loop Key OBU (OBU_OPEN_LOOP_KEY)
-// A coded frame with obu_type equal to OBU_OPEN_LOOP_KEY.
-// Uses tile_group_obu() syntax which embeds frame_header_info().
-// Unlike CLK, OLK does not invalidate reference buffers and sets
-// immediate_output_frame = 0 (output is deferred).
 class OLKOBU : public BaseOBU {
 public:
   explicit OLKOBU(const OBUPosition& pos) : BaseOBU(pos) {}

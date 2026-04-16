@@ -17,8 +17,6 @@
 namespace av2_obu {
 
 // Leading Show Existing Frame OBU (OBU_LEADING_SEF)
-// A SEF that appears before the associated key frame in display order.
-// Same parsing as REGULAR_SEF.
 class LeadingSEFOBU : public BaseOBU {
 public:
   explicit LeadingSEFOBU(const OBUPosition& pos) : BaseOBU(pos) {}

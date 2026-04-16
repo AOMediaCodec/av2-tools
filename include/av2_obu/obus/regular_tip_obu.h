@@ -12,10 +12,11 @@
 #pragma once
 
 #include <av2_obu/core/base_obu.h>
+#include <av2_obu/core/frame_header_info.h>
 
 namespace av2_obu {
 
-// Regular TIP OBU
+// Regular Temporally Interpolated Prediction OBU (OBU_REGULAR_TIP)
 class RegularTIPOBU : public BaseOBU {
 public:
   explicit RegularTIPOBU(const OBUPosition& pos) : BaseOBU(pos) {}
@@ -23,8 +24,13 @@ public:
   json to_json() const override;
   std::string type_name() const override { return "REGULAR_TIP"; }
 
+  const FrameHeaderInfo& frame_header() const { return frame_header_; }
+
 protected:
   bool parse_payload(std::ifstream& ifs) override;
+
+private:
+  FrameHeaderInfo frame_header_;
 };
 
 }  // namespace av2_obu
