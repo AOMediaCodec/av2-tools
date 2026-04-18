@@ -114,8 +114,10 @@ bool OBUParser::scan_file(std::ifstream& ifs) {
     // Create OBU object
     auto obu = BaseOBU::create(ifs, pos, parse_mode_, active_sequence_header_);
     if (!obu) {
-      spdlog::error("Failed to create OBU at position {}", static_cast<long long>(record_begin));
-      return false;
+      spdlog::warn("Skipping OBU at position {} (parse failed)", static_cast<long long>(record_begin));
+      ifs.seekg(pos.end_pos);
+      obu_index++;
+      continue;
     }
 
     // Track active sequence header for subsequent OBUs

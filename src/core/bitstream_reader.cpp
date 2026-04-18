@@ -126,13 +126,22 @@ uint64_t BitstreamReader::read_uvlc() {
   return result;
 }
 
+int64_t BitstreamReader::read_svlc() {
+  uint64_t value = read_uvlc();
+  if (value == 0) return 0;
+  int64_t half = static_cast<int64_t>((value + 1) >> 1);
+  int64_t result = (value & 1) ? half : -half;
+  spdlog::debug("read_svlc() = {} (uvlc={})", result, value);
+  return result;
+}
+
 uint32_t BitstreamReader::read_leb128() {
-  // LEB128 decoding: read bytes until we find one without MSB set
+  // This syntax element will only be present when the bitstream position is byte aligned
+  if (bit_pos_ % 8 != 0) {
+    spdlog::warn("read_leb128() called at non-byte-aligned position (bit {})", bit_pos_);
+  }
   uint32_t value = 0;
   uint32_t byte_count = 0;
-
-  // Make sure we're byte-aligned for LEB128
-  byte_align();
 
   for (uint32_t i = 0; i < 8; ++i) {  // Max 8 bytes for uint32_t
     if (!has_bits(8)) {
@@ -151,6 +160,7 @@ uint32_t BitstreamReader::read_leb128() {
   }
 
   spdlog::debug("read_leb128() = {} ({} bytes)", value, byte_count);
+  leb128_bytes_ = byte_count;
   return value;
 }
 
@@ -207,6 +217,14 @@ void BitstreamReader::byte_align() {
     bit_pos_ = ((bit_pos_ / 8) + 1) * 8;
     spdlog::debug("byte_align() -> bit_pos={}", bit_pos_);
   }
+}
+
+void BitstreamReader::skip_bits(size_t n) {
+  if (!has_bits(n)) {
+    spdlog::error("Not enough bits to skip (need {}, have {})", n, bits_remaining());
+    throw std::runtime_error("Bitstream underflow during skip");
+  }
+  bit_pos_ += n;
 }
 
 bool BitstreamReader::has_bits(size_t n) const {

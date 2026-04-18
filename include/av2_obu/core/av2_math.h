@@ -14,7 +14,6 @@
 #include <cstdint>
 
 // AV2 Spec Section 4.8 — Mathematical functions
-// All definitions match the spec pseudocode for traceability.
 
 namespace av2_obu {
 
@@ -26,6 +25,11 @@ constexpr inline int32_t Clip3(int32_t x, int32_t y, int32_t z) {
   if (z < x) return x;
   if (z > y) return y;
   return z;
+}
+
+// Clip1(x) = Clip3(0, 2^BitDepth - 1, x)
+constexpr inline int32_t Clip1(int32_t x, uint32_t bitDepth) {
+  return Clip3(0, (1 << bitDepth) - 1, x);
 }
 
 constexpr inline int32_t Min(int32_t x, int32_t y) {
@@ -81,6 +85,15 @@ constexpr inline uint32_t CeilLog2(uint32_t x) {
     p = p << 1;
   }
   return i;
+}
+
+// tile_log2(blkSize, target): smallest k such that blkSize << k >= target
+constexpr inline uint32_t tile_log2(uint32_t blkSize, uint32_t target) {
+  uint32_t k = 0;
+  while ((blkSize << k) < target) {
+    k++;
+  }
+  return k;
 }
 
 }  // namespace av2_obu

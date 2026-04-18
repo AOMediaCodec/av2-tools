@@ -208,9 +208,19 @@ std::unique_ptr<BaseOBU> BaseOBU::create(std::ifstream& ifs, const OBUPosition& 
   obu->set_parse_mode(mode);
   obu->set_active_sequence_header(seq_header);
   ifs.seekg(pos.header_pos);
-  if (!obu->parse(ifs)) {
-    spdlog::error("Failed to parse {} at position {}", to_string(type),
-                  static_cast<long long>(pos.header_pos));
+  try {
+    if (!obu->parse(ifs)) {
+      spdlog::error("Failed to parse {} at position {}", to_string(type),
+                    static_cast<long long>(pos.header_pos));
+      // Seek to end of OBU so parsing can continue with the next OBU
+      ifs.seekg(pos.end_pos);
+      return nullptr;
+    }
+  } catch (const std::exception& e) {
+    spdlog::error("Exception parsing {} at position {}: {}", to_string(type),
+                  static_cast<long long>(pos.header_pos), e.what());
+    // Seek to end of OBU so parsing can continue with the next OBU
+    ifs.seekg(pos.end_pos);
     return nullptr;
   }
 

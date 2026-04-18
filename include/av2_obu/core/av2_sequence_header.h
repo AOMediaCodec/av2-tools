@@ -203,7 +203,7 @@ struct SequenceFilterConfig {
   uint32_t CdefOnSkipTxfm = CDEF_ON_SKIP_TXFM_ADAPTIVE;
 
   bool parse(BitstreamReader& br, bool single_picture_header_flag, bool Monochrome,
-             uint32_t seq_sb_size);
+             BlockSize seq_sb_size);
   json to_json() const;
 };
 
@@ -212,7 +212,9 @@ struct SequenceTileConfig {
   uint32_t seq_tile_info_present_flag = 0;
   uint32_t allow_tile_info_change = 0;
 
-  bool parse(BitstreamReader& br);
+  bool parse(BitstreamReader& br, uint32_t frameWidth, uint32_t frameHeight,
+             bool use_256x256_superblock, bool use_128x128_superblock, uint32_t seq_level_idx,
+             uint32_t seq_tier);
   json to_json() const;
 };
 
@@ -284,8 +286,14 @@ struct AV2SequenceHeader {
 
   uint32_t film_grain_params_present = 0;
 
-  // Helper: get sequence superblock size (for conditionals in filter config)
-  uint32_t get_seq_sb_size() const;
+  // obu_extension_flag: currently defined in open_bitstream_unit() for
+  // is_extensible_obu() types (SH, MFH, LCR, CI, OPS, Atlas Segment).
+  // We parse it as part of the SH payload. We should really change the spec, this is super confusing.
+  // re-open https://github.com/AOMediaCodec/av2-spec-internal/issues/488
+  uint32_t obu_extension_flag = 0;
+
+  // Helper: get sequence superblock size as BlockSize enum (spec: get_seq_sb_size())
+  BlockSize get_seq_sb_size() const;
 
   // Parse from bitstream
   bool parse(BitstreamReader& br);

@@ -42,8 +42,13 @@ public:
   // uvlc() - Read variable length unsigned number
   uint64_t read_uvlc();
 
+  // svlc() - Read variable length signed number
+  int64_t read_svlc();
+
   // leb128() - Read unsigned integer represented by a variable number of little-endian bytes.
+  // After calling, leb128_bytes() returns the number of bytes consumed.
   uint32_t read_leb128();
+  uint32_t leb128_bytes() const { return leb128_bytes_; }
 
   // ns(n) - Read unsigned encoded integer with maximum number of values n
   uint32_t read_ns(uint32_t n);
@@ -56,6 +61,12 @@ public:
 
   // Byte align (skip to next byte boundary)
   void byte_align();
+
+  // Skip n bits without reading (advance bit position)
+  void skip_bits(size_t n);
+
+  // Set absolute bit position (for seeking within payload)
+  void set_bit_pos(size_t pos) { bit_pos_ = pos; }
 
   // Get current bit position
   size_t bits_read() const { return bit_pos_; }
@@ -71,7 +82,8 @@ public:
 
 private:
   std::vector<uint8_t> data_;
-  size_t bit_pos_ = 0;  // Current bit position
+  size_t bit_pos_ = 0;        // Current bit position
+  uint32_t leb128_bytes_ = 0; // Bytes consumed by last read_leb128() call
 };
 
 // Helper function: floor(log2(x))

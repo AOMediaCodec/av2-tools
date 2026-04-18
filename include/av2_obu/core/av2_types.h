@@ -178,14 +178,105 @@ enum OpflRefineType : uint32_t {
   REFINE_AUTO = 3
 };
 
-// Motion mode types
-enum MotionMode : uint32_t { INTERINTRA = 0, OBMC = 1, WARP = 2, DELTAWARP = 3, WARP_EXTEND = 4 };
+// Motion mode types (spec section 3)
+enum MotionMode : uint32_t {
+  SIMPLE = 0,
+  INTERINTRA = 1,
+  LOCALWARP = 2,
+  DELTAWARP = 3,
+  EXTENDWARP = 4
+};
 
 // DRL reorder modes
 enum DrlReorder : uint32_t {
   DRL_REORDER_DISABLED = 0,
   DRL_REORDER_CONSTRAINT = 1,
   DRL_REORDER_ALWAYS = 2
+};
+
+// LCR layer types (Table 6.8)
+enum LcrLayerType : uint32_t {
+  TEXTURE_LAYER = 0,
+  AUX_LAYER = 1
+  // 2-255: Reserved
+};
+
+// LCR auxiliary types (Table 6.9)
+enum LcrAuxiliaryType : uint32_t {
+  ALPHA_AUX = 0,
+  DEPTH_AUX = 1,
+  SEGMENTATION_AUX = 2,
+  GAIN_MAP_AUX = 3
+  // 4-127: Reserved, 128-159: Unspecified
+};
+
+// LCR view types (Table 6.10)
+enum LcrViewType : uint32_t {
+  VIEW_UNSPECIFIED = 0,
+  VIEW_CENTER = 1,
+  VIEW_LEFT = 2,
+  VIEW_RIGHT = 3,
+  VIEW_EXPLICIT = 4
+  // 5-255: Reserved
+};
+
+// LCR global purpose IDs (Table 6.7)
+enum LcrGlobalPurpose : uint32_t {
+  LCRP_UNSPECIFIED = 0,
+  LCRP_STEREO_VIEWPORTS = 1,
+  LCRP_IMMERSIVE_MULTI_VIEWPORTS = 2,
+  LCRP_IMMERSIVE_MULTI_VIEWPORTS_ALPHA = 3,
+  LCRP_IMMERSIVE_MULTI_VIEWPORTS_DEPTH = 4,
+  LCRP_IMMERSIVE_MULTI_VIEWPORTS_ALPHA_DEPTH = 5,
+  LCRP_MULTIVIEW_PLAYBACK = 6,
+  LCRP_SUBREGION_PLAYBACK = 7
+  // 8-127: Reserved
+};
+
+// OPS intent (Table 6.15)
+enum OpsIntent : uint32_t {
+  OPSI_UNSPECIFIED = 0,
+  OPSI_SCALABILITY = 1,
+  OPSI_STEREO = 2,
+  OPSI_TEXTURE_ALPHA = 3,
+  OPSI_TEXTURE_DEPTH = 4,
+  OPSI_GAIN_MAP = 5,
+  OPSI_MULTIVIEW = 6
+  // 7-127: Reserved
+};
+
+// Block sizes (spec Table 6.46)
+enum BlockSize : uint32_t {
+  BLOCK_4X4 = 0,
+  BLOCK_4X8 = 1,
+  BLOCK_8X4 = 2,
+  BLOCK_8X8 = 3,
+  BLOCK_8X16 = 4,
+  BLOCK_16X8 = 5,
+  BLOCK_16X16 = 6,
+  BLOCK_16X32 = 7,
+  BLOCK_32X16 = 8,
+  BLOCK_32X32 = 9,
+  BLOCK_32X64 = 10,
+  BLOCK_64X32 = 11,
+  BLOCK_64X64 = 12,
+  BLOCK_64X128 = 13,
+  BLOCK_128X64 = 14,
+  BLOCK_128X128 = 15,
+  BLOCK_128X256 = 16,
+  BLOCK_256X128 = 17,
+  BLOCK_256X256 = 18,
+  BLOCK_4X16 = 19,
+  BLOCK_16X4 = 20,
+  BLOCK_8X32 = 21,
+  BLOCK_32X8 = 22,
+  BLOCK_16X64 = 23,
+  BLOCK_64X16 = 24,
+  BLOCK_4X32 = 25,
+  BLOCK_32X4 = 26,
+  BLOCK_8X64 = 27,
+  BLOCK_64X8 = 28,
+  BLOCK_SIZES = 29
 };
 
 // ========== HELPER FUNCTIONS ==========
@@ -225,9 +316,22 @@ inline bool is_regular_obu(OBUType type) {
          type == OBUType::SWITCH || type == OBUType::RAS_FRAME || type == OBUType::BRIDGE_FRAME;
 }
 
-// ========== CONSTANTS ==========
+// OBU types with extensible payloads (spec: obu_extension_flag after payload)
+inline bool is_extensible_obu(OBUType type) {
+  return type == OBUType::SEQUENCE_HEADER || type == OBUType::MULTI_FRAME_HEADER ||
+         type == OBUType::LAYER_CONFIGURATION_RECORD ||
+         type == OBUType::CONTENT_INTERPRETATION || type == OBUType::OPERATING_POINT_SET ||
+         type == OBUType::ATLAS_SEGMENT;
+}
 
-// Frame types
+// get_seq_sb_size() helper
+inline BlockSize get_seq_sb_size(bool use_256x256_superblock, bool use_128x128_superblock) {
+  if (use_256x256_superblock) return BLOCK_256X256;
+  if (use_128x128_superblock) return BLOCK_128X128;
+  return BLOCK_64X64;
+}
+
+// ========== CONSTANTS ==========
 constexpr uint32_t KEY_FRAME = 0;
 constexpr uint32_t INTER_FRAME = 1;
 constexpr uint32_t INTRA_ONLY_FRAME = 2;
@@ -235,7 +339,7 @@ constexpr uint32_t SWITCH_FRAME = 3;
 
 // Primary reference
 constexpr uint32_t PRIMARY_REF_NONE = 7;
-constexpr uint32_t PRIMARY_REF_CHOOSE = 7;  // Alias: let decoder choose
+constexpr uint32_t PRIMARY_REF_CHOOSE = 8;
 
 // TIP frame modes
 constexpr uint32_t TIP_FRAME_DISABLED = 0;
@@ -251,13 +355,28 @@ constexpr int32_t DELTA_DCQUANT_MAX = (1 << (DELTA_DCQUANT_BITS - 2));
 constexpr int32_t DELTA_DCQUANT_MIN = (DELTA_DCQUANT_MAX - (1 << DELTA_DCQUANT_BITS) + 1);
 
 // Temporal and multilayer
-constexpr uint32_t MAX_NUM_TLAYERS = 4;  // Maximum number of temporal layers
-constexpr uint32_t MAX_NUM_MLAYERS = 8;  // Maximum number of embedded layers
+constexpr uint32_t MAX_NUM_TLAYERS = 4;   // Maximum number of temporal layers
+constexpr uint32_t MAX_NUM_MLAYERS = 8;   // Maximum number of embedded layers
+constexpr uint32_t GLOBAL_XLAYER_ID = 31; // Extended layer ID for global/all-xlayers OBUs
 
 // Reference frames
 constexpr uint32_t REFS_PER_FRAME = 7;         // Number of reference frames for Inter prediction
 constexpr uint32_t MAX_REF_MV_STACK_SIZE = 6;  // Maximum number of motion vectors in the stack
 constexpr uint32_t MAX_REF_BV_STACK_SIZE = 4;  // Maximum number of block vectors
+constexpr uint32_t NUM_REF_FRAMES = 16;        // Number of reference frame buffers
+
+// Segmentation
+constexpr uint32_t MAX_SEGMENTS = 16;  // Maximum number of segments
+constexpr uint32_t SEG_LVL_ALT_Q = 0;
+constexpr uint32_t SEG_LVL_SKIP = 1;
+constexpr uint32_t SEG_LVL_GLOBALMV = 2;
+constexpr uint32_t SEG_LVL_MAX = 3;
+
+// Tile limits
+constexpr uint32_t MAX_TILE_WIDTH = 4096;
+constexpr uint32_t MAX_TILE_AREA = 4096 * 2304;
+constexpr uint32_t MAX_TILE_COLS = 64;
+constexpr uint32_t MAX_TILE_ROWS = 64;
 
 // Chroma format
 constexpr uint32_t CHROMA_FORMAT_420 = 0;

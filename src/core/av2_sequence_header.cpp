@@ -14,6 +14,7 @@
 #include <algorithm>
 
 #include <av2_obu/core/av2_sequence_header.h>
+#include <av2_obu/core/av2_tables.h>
 
 namespace av2_obu {
 
@@ -125,6 +126,28 @@ json SequencePartitionConfig::to_json() const {
               {"MaxPbAspectRatio", MaxPbAspectRatio}};
 }
 
+// ==================== seg_info() ====================
+
+// Segmentation feature tables
+static constexpr uint32_t Segmentation_Feature_Bits[SEG_LVL_MAX] = {9, 0, 0};
+static constexpr uint32_t Segmentation_Feature_Signed[SEG_LVL_MAX] = {1, 0, 0};
+
+// Parse seg_info(numSegments) — reads per-segment feature enable flags and values
+static void parse_seg_info(BitstreamReader& br, uint32_t numSegments) {
+  for (uint32_t i = 0; i < numSegments; i++) {
+    for (uint32_t j = 0; j < SEG_LVL_MAX; j++) {
+      uint32_t feature_enabled = br.read_bit();
+      if (feature_enabled && Segmentation_Feature_Bits[j] > 0) {
+        if (Segmentation_Feature_Signed[j]) {
+          br.read_su(1 + Segmentation_Feature_Bits[j]);
+        } else {
+          br.read_bits(Segmentation_Feature_Bits[j]);
+        }
+      }
+    }
+  }
+}
+
 // ==================== SequenceSegmentConfig ====================
 
 bool SequenceSegmentConfig::parse(BitstreamReader& br) {
@@ -136,8 +159,7 @@ bool SequenceSegmentConfig::parse(BitstreamReader& br) {
   seq_seg_info_present_flag = br.read_bit();
   if (seq_seg_info_present_flag) {
     seq_allow_seg_info_change = br.read_bit();
-    // seg_info() sub-function not yet provided in spec — stub with warning
-    spdlog::warn("seg_info() parsing not yet implemented - skipping");
+    parse_seg_info(br, MaxSegments);
   }
 
   spdlog::debug("  enable_ext_seg = {}, MaxSegments = {}", enable_ext_seg, MaxSegments);
@@ -161,14 +183,15 @@ bool SequenceIntraConfig::parse(BitstreamReader& br, bool Monochrome) {
   enable_intra_edge_filter = br.read_bit();
   enable_mrls = br.read_bit();
   enable_cfl_intra = br.read_bit();
-  enable_mhccp = br.read_bit();
-  enable_ibp = br.read_bit();
 
   if (Monochrome) {
     cfl_ds_filter_index = 0;
   } else {
     cfl_ds_filter_index = br.read_bits(2);
   }
+
+  enable_mhccp = br.read_bit();
+  enable_ibp = br.read_bit();
 
   return true;
 }
@@ -278,6 +301,8 @@ bool SequenceInterConfig::parse(BitstreamReader& br, bool single_picture_header_
 
     ActiveNumRefFrames = std::min(REFS_PER_FRAME, NumRefFrames);
 
+    long_term_frame_id_bits = br.read_bits(3);
+
     seq_max_drl_bits_minus1 = br.read_ns(MAX_REF_MV_STACK_SIZE - 1);
     allow_frame_max_drl_bits = br.read_bit();
 
@@ -310,7 +335,6 @@ bool SequenceInterConfig::parse(BitstreamReader& br, bool single_picture_header_
     }
 
     enable_opfl_refine = br.read_bits(2);
-    enable_adaptive_mvd = br.read_bit();
     enable_refinemv = br.read_bit();
 
     if (enable_tip && (enable_opfl_refine != 0 || enable_refinemv)) {
@@ -320,14 +344,13 @@ bool SequenceInterConfig::parse(BitstreamReader& br, bool single_picture_header_
     }
 
     enable_bru = br.read_bit();
+    enable_adaptive_mvd = br.read_bit();
     enable_mvd_sign_derive = br.read_bit();
     enable_flex_mvres = br.read_bit();
 
     enable_global_motion = br.read_bit();
 
     enable_short_refresh_frame_flags = br.read_bit();
-
-    long_term_frame_id_bits = br.read_bits(3);
   }
 
   spdlog::debug("  NumRefFrames = {}, OrderHintBits = {}", NumRefFrames, OrderHintBits);
@@ -337,22 +360,41 @@ bool SequenceInterConfig::parse(BitstreamReader& br, bool single_picture_header_
 
 json SequenceInterConfig::to_json() const {
   json j = {{"seq_enabled_motion_modes", seq_enabled_motion_modes},
+            {"seq_frame_motion_modes_present_flag", seq_frame_motion_modes_present_flag},
+            {"enable_six_param_warp_delta", enable_six_param_warp_delta},
+            {"enable_masked_compound", enable_masked_compound},
+            {"enable_ref_frame_mvs", enable_ref_frame_mvs},
+            {"reduced_ref_frame_mvs_mode", reduced_ref_frame_mvs_mode},
+            {"OrderHintBits", OrderHintBits},
             {"enable_refmvbank", enable_refmvbank},
             {"disable_drl_reorder", disable_drl_reorder},
             {"DrlReorder", DrlReorder},
-            {"seq_max_bvp_drl_bits_minus1", seq_max_bvp_drl_bits_minus1},
-            {"allow_frame_max_bvp_drl_bits", allow_frame_max_bvp_drl_bits},
-            {"enable_mv_traj", enable_mv_traj},
-            {"enable_bawp", enable_bawp},
-            {"enable_imp_msk_bld", enable_imp_msk_bld},
+            {"explicit_ref_frame_map", explicit_ref_frame_map},
             {"NumRefFrames", NumRefFrames},
             {"ActiveNumRefFrames", ActiveNumRefFrames},
-            {"OrderHintBits", OrderHintBits},
-            {"long_term_frame_id_bits", long_term_frame_id_bits}};
-
-  if (seq_frame_motion_modes_present_flag) {
-    j["seq_frame_motion_modes_present_flag"] = seq_frame_motion_modes_present_flag;
-  }
+            {"long_term_frame_id_bits", long_term_frame_id_bits},
+            {"seq_max_drl_bits_minus1", seq_max_drl_bits_minus1},
+            {"allow_frame_max_drl_bits", allow_frame_max_drl_bits},
+            {"seq_max_bvp_drl_bits_minus1", seq_max_bvp_drl_bits_minus1},
+            {"allow_frame_max_bvp_drl_bits", allow_frame_max_bvp_drl_bits},
+            {"num_same_ref_compound", num_same_ref_compound},
+            {"enable_tip", enable_tip},
+            {"enable_tip_hole_fill", enable_tip_hole_fill},
+            {"enable_mv_traj", enable_mv_traj},
+            {"enable_bawp", enable_bawp},
+            {"enable_cwp", enable_cwp},
+            {"enable_imp_msk_bld", enable_imp_msk_bld},
+            {"enable_lf_sub_pu", enable_lf_sub_pu},
+            {"enable_tip_explicit_qp", enable_tip_explicit_qp},
+            {"enable_opfl_refine", enable_opfl_refine},
+            {"enable_adaptive_mvd", enable_adaptive_mvd},
+            {"enable_refinemv", enable_refinemv},
+            {"enable_tip_refinemv", enable_tip_refinemv},
+            {"enable_bru", enable_bru},
+            {"enable_mvd_sign_derive", enable_mvd_sign_derive},
+            {"enable_flex_mvres", enable_flex_mvres},
+            {"enable_global_motion", enable_global_motion},
+            {"enable_short_refresh_frame_flags", enable_short_refresh_frame_flags}};
 
   return j;
 }
@@ -436,7 +478,7 @@ bool SequenceTransformQuantEntropyConfig::parse(BitstreamReader& br,
   }
 
   enable_tcq = br.read_bit();
-  if (enable_tcq) {
+  if (enable_tcq && !single_picture_header_flag) {
     choose_tcq_per_frame = br.read_bit();
   } else {
     choose_tcq_per_frame = 0;
@@ -510,6 +552,13 @@ json SequenceTransformQuantEntropyConfig::to_json() const {
               {"enable_avg_cdf", enable_avg_cdf},
               {"avg_cdf_type", avg_cdf_type},
               {"separate_uv_delta_q", separate_uv_delta_q},
+              {"equal_ac_dc_q", equal_ac_dc_q},
+              {"base_y_dc_delta_q", base_y_dc_delta_q},
+              {"y_dc_delta_q_enabled", y_dc_delta_q_enabled},
+              {"base_uv_dc_delta_q", base_uv_dc_delta_q},
+              {"uv_dc_delta_q_enabled", uv_dc_delta_q_enabled},
+              {"base_uv_ac_delta_q", base_uv_ac_delta_q},
+              {"uv_ac_delta_q_enabled", uv_ac_delta_q_enabled},
               {"BaseYDcDeltaQ", BaseYDcDeltaQ},
               {"BaseUVDcDeltaQ", BaseUVDcDeltaQ},
               {"BaseUVAcDeltaQ", BaseUVAcDeltaQ}};
@@ -518,14 +567,14 @@ json SequenceTransformQuantEntropyConfig::to_json() const {
 // ==================== SequenceFilterConfig ====================
 
 bool SequenceFilterConfig::parse(BitstreamReader& br, bool single_picture_header_flag,
-                                 bool Monochrome, uint32_t seq_sb_size) {
+                                 bool Monochrome, BlockSize seq_sb_size) {
   spdlog::debug("Parsing sequence_filter_config");
 
   disable_loopfilters_across_tiles = br.read_bit();
   enable_cdef = br.read_bit();
   enable_gdf = br.read_bit();
 
-  if (enable_gdf && seq_sb_size != 256) {
+  if (enable_gdf && seq_sb_size == BLOCK_64X64) {
     gdf_unit_matches_sb_size = br.read_bit();
   } else {
     gdf_unit_matches_sb_size = 0;
@@ -548,7 +597,7 @@ bool SequenceFilterConfig::parse(BitstreamReader& br, bool single_picture_header
   }
 
   enable_ccso = br.read_bit();
-  if (enable_ccso && seq_sb_size != 256) {
+  if (enable_ccso) {
     ccso_unit_matches_sb_size = br.read_bit();
   } else {
     ccso_unit_matches_sb_size = 0;
@@ -587,14 +636,121 @@ json SequenceFilterConfig::to_json() const {
 
 // ==================== SequenceTileConfig ====================
 
-bool SequenceTileConfig::parse(BitstreamReader& br) {
+// Parse tile_params() — computes tile grid and reads tile spacing syntax
+static void parse_tile_params(BitstreamReader& br, uint32_t frameWidth, uint32_t frameHeight,
+                              BlockSize uniformSbSize, BlockSize sbSize, bool isBridge,
+                              uint32_t seq_level_idx, uint32_t seq_tier) {
+  uint32_t miCols = 2 * ((frameWidth + 7) >> 3);
+  uint32_t miRows = 2 * ((frameHeight + 7) >> 3);
+  uint32_t sb4x4 = Num_4x4_Blocks_Wide[sbSize];
+  uint32_t sbShift = Mi_Width_Log2[sbSize];
+  uint32_t sbCols = (miCols + sb4x4 - 1) >> sbShift;
+  uint32_t sbRows = (miRows + sb4x4 - 1) >> sbShift;
+
+  uint32_t maxTileWidthSb, maxTileAreaSb;
+  if (seq_level_idx != 31) {
+    maxTileWidthSb = (Tile_Width_Scaling_Factor[seq_tier][seq_level_idx] * MAX_TILE_WIDTH) >>
+                     (sbShift + 4);
+    maxTileAreaSb = (Tile_Area_Scaling_Factor[seq_tier][seq_level_idx] * MAX_TILE_AREA) >>
+                    (2 * (sbShift + 2) + 2);
+  } else {
+    maxTileWidthSb = sbCols;
+    maxTileAreaSb = sbCols * sbRows;
+  }
+
+  uint32_t minLog2TileCols = tile_log2(maxTileWidthSb, sbCols);
+  uint32_t maxLog2TileCols = tile_log2(1, Min(sbCols, MAX_TILE_COLS));
+  uint32_t maxLog2TileRows = tile_log2(1, Min(sbRows, MAX_TILE_ROWS));
+  uint32_t minLog2Tiles = Max(minLog2TileCols, tile_log2(maxTileAreaSb, sbRows * sbCols));
+
+  uint32_t uniform_tile_spacing_flag;
+  if (isBridge) {
+    uniform_tile_spacing_flag = 1;
+  } else {
+    uniform_tile_spacing_flag = br.read_bit();
+  }
+
+  if (uniform_tile_spacing_flag) {
+    uint32_t tileColsLog2 = minLog2TileCols;
+    if (!isBridge) {
+      while (tileColsLog2 < maxLog2TileCols) {
+        uint32_t increment = br.read_bit();
+        if (increment) {
+          tileColsLog2++;
+        } else {
+          break;
+        }
+      }
+    }
+    // uniform_spacing() computes tile starts — we don't need the results,
+    // just need to consume the right bits (already done above)
+
+    // Compute tileCols for minLog2TileRows
+    uint32_t uniformSbShift = Mi_Width_Log2[uniformSbSize];
+    uint32_t uniformSb4x4 = Num_4x4_Blocks_Wide[uniformSbSize];
+    uint32_t uniformSbs = (miCols + uniformSb4x4 - 1) >> uniformSbShift;
+    uint32_t fullSbs = miCols >> uniformSbShift;
+    uint32_t tileSb = (tileColsLog2 > 0) ? (fullSbs >> tileColsLog2) : fullSbs;
+    uint32_t tileCols = (tileSb > 0) ? (1u << tileColsLog2) : uniformSbs;
+    // Clamp
+    if (tileCols == 0) tileCols = 1;
+    uint32_t actualTileColsLog2 = tile_log2(1, tileCols);
+    uint32_t minLog2TileRows = (minLog2Tiles > actualTileColsLog2)
+                                   ? (minLog2Tiles - actualTileColsLog2)
+                                   : 0;
+
+    uint32_t tileRowsLog2 = minLog2TileRows;
+    if (!isBridge) {
+      while (tileRowsLog2 < maxLog2TileRows) {
+        uint32_t increment = br.read_bit();
+        if (increment) {
+          tileRowsLog2++;
+        } else {
+          break;
+        }
+      }
+    }
+  } else {
+    // Non-uniform tile spacing — explicit tile sizes
+    uint32_t widestTileSb = 1;
+    uint32_t startSb = 0;
+    uint32_t tileCols = 0;
+    while (startSb < sbCols) {
+      uint32_t n = Min(sbCols - startSb, maxTileWidthSb);
+      uint32_t width_in_sbs_minus_1 = br.read_ns(n);
+      uint32_t sizeSb = width_in_sbs_minus_1 + 1;
+      widestTileSb = Max(sizeSb, widestTileSb);
+      startSb += sizeSb;
+      tileCols++;
+    }
+    uint32_t tileColsLog2 = tile_log2(1, tileCols);
+
+    uint32_t maxTileHeightSb;
+    if (minLog2Tiles > 0) {
+      maxTileAreaSb = (sbRows * sbCols) >> (minLog2Tiles + 1);
+    }
+    maxTileHeightSb = Max(maxTileAreaSb / widestTileSb, 1u);
+
+    startSb = 0;
+    while (startSb < sbRows) {
+      uint32_t maxHeight = Min(sbRows - startSb, maxTileHeightSb);
+      uint32_t height_in_sbs_minus_1 = br.read_ns(maxHeight);
+      startSb += height_in_sbs_minus_1 + 1;
+    }
+  }
+}
+
+bool SequenceTileConfig::parse(BitstreamReader& br, uint32_t frameWidth, uint32_t frameHeight,
+                               bool use_256x256_superblock, bool use_128x128_superblock,
+                               uint32_t seq_level_idx, uint32_t seq_tier) {
   spdlog::debug("Parsing sequence_tile_config");
 
   seq_tile_info_present_flag = br.read_bit();
   if (seq_tile_info_present_flag) {
     allow_tile_info_change = br.read_bit();
-    // tile_params() sub-function not yet provided — stub with warning
-    spdlog::warn("tile_params() parsing not yet implemented - skipping");
+    BlockSize seqSbSize = get_seq_sb_size(use_256x256_superblock, use_128x128_superblock);
+    parse_tile_params(br, frameWidth, frameHeight, seqSbSize, seqSbSize, false, seq_level_idx,
+                      seq_tier);
   }
 
   return true;
@@ -607,12 +763,12 @@ json SequenceTileConfig::to_json() const {
 
 // ==================== AV2SequenceHeader Helpers ====================
 
-uint32_t AV2SequenceHeader::get_seq_sb_size() const {
+BlockSize AV2SequenceHeader::get_seq_sb_size() const {
   if (partition_config.use_256x256_superblock)
-    return 256;
+    return BLOCK_256X256;
   if (partition_config.use_128x128_superblock)
-    return 128;
-  return 64;
+    return BLOCK_128X128;
+  return BLOCK_64X64;
 }
 
 void AV2SequenceHeader::set_chroma_format_and_bit_depth() {
@@ -825,10 +981,16 @@ bool AV2SequenceHeader::parse(BitstreamReader& br) {
     return false;
   if (!filter_config.parse(br, single_picture_header_flag, Monochrome, get_seq_sb_size()))
     return false;
-  if (!tile_config.parse(br))
+  if (!tile_config.parse(br, static_cast<uint32_t>(max_frame_width_minus_1) + 1,
+                         static_cast<uint32_t>(max_frame_height_minus_1) + 1,
+                         partition_config.use_256x256_superblock,
+                         partition_config.use_128x128_superblock, seq_level_idx, seq_tier))
     return false;
 
   film_grain_params_present = br.read_bit();
+
+  // https://github.com/AOMediaCodec/av2-spec-internal/issues/488
+  obu_extension_flag = br.read_bit();
 
   spdlog::debug("Successfully parsed AV2 Sequence Header");
   return true;
@@ -862,7 +1024,8 @@ json AV2SequenceHeader::to_json() const {
             {"tqe_config", tqe_config.to_json()},
             {"filter_config", filter_config.to_json()},
             {"tile_config", tile_config.to_json()},
-            {"film_grain_params_present", film_grain_params_present}};
+            {"film_grain_params_present", film_grain_params_present},
+            {"obu_extension_flag", obu_extension_flag}};
 
   if (seq_cropping_window_present_flag) {
     j["cropping_window"] = {{"left", seq_cropping_win_left_offset},
