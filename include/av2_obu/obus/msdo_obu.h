@@ -13,9 +13,11 @@
 
 #include <av2_obu/core/base_obu.h>
 
+#include <vector>
+
 namespace av2_obu {
 
-// MSDO OBU
+// Multi Stream Decoder Operation OBU (OBU_MSDO) (See also LCR)
 class MSDOOBU : public BaseOBU {
 public:
   explicit MSDOOBU(const OBUPosition& pos) : BaseOBU(pos) {}
@@ -23,8 +25,33 @@ public:
   json to_json() const override;
   std::string type_name() const override { return "MSDO"; }
 
+  // Per-stream info
+  struct StreamInfo {
+    uint32_t sub_xlayer_id = 0;
+    uint32_t sub_stream_max_profile = 0;
+    uint32_t sub_stream_max_level = 0;
+    uint32_t sub_stream_max_tier = 0;
+  };
+
+  uint32_t num_streams() const { return num_streams_; }
+  uint32_t multistream_profile_idc() const { return multistream_profile_idc_; }
+  uint32_t multistream_level_idx() const { return multistream_level_idx_; }
+  uint32_t multistream_tier() const { return multistream_tier_; }
+  const std::vector<StreamInfo>& streams() const { return streams_; }
+
 protected:
   bool parse_payload(std::ifstream& ifs) override;
+
+private:
+  uint32_t num_streams_ = 0;
+  uint32_t multistream_profile_idc_ = 0;
+  uint32_t multistream_level_idx_ = 0;
+  uint32_t multistream_tier_ = 0;
+  uint32_t multistream_even_allocation_flag_ = 0;
+  uint32_t multistream_large_picture_idc_ = 0;
+  uint32_t multistream_doh_constraint_flag_ = 0;
+  std::vector<StreamInfo> streams_;
+  bool parsed_ = false;
 };
 
 }  // namespace av2_obu
