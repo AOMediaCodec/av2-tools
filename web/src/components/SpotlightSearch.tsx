@@ -13,7 +13,12 @@ interface SearchResult {
   obu: any;
   matchType: 'type' | 'layer' | 'offset' | 'index' | 'field';
   matchReason: string;
-  matchedPaths?: string[]; // For field matches, show where the field was found
+  matchedFields?: FieldMatch[]; // For field matches, show where the field was found with values
+}
+
+interface FieldMatch {
+  path: string;
+  value: any;
 }
 
 export function SpotlightSearch({ isOpen, onClose, obus, onSelectResult }: SpotlightSearchProps) {
@@ -123,14 +128,14 @@ export function SpotlightSearch({ isOpen, onClose, obus, onSelectResult }: Spotl
       }
 
       // Deep search in OBU fields
-      const matchedPaths = searchFieldsInObject(obu, fieldQuery);
-      if (matchedPaths.length > 0) {
+      const matchedFields = searchFieldsInObject(obu, fieldQuery);
+      if (matchedFields.length > 0) {
         searchResults.push({
           obuIndex: index,
           obu,
           matchType: 'field',
-          matchReason: `${matchedPaths.length} field${matchedPaths.length > 1 ? 's' : ''} matched`,
-          matchedPaths: matchedPaths.slice(0, 3), // Show max 3 paths
+          matchReason: `${matchedFields.length} field${matchedFields.length > 1 ? 's' : ''} matched`,
+          matchedFields: matchedFields.slice(0, 3), // Show max 3
         });
       }
     });
@@ -222,17 +227,18 @@ export function SpotlightSearch({ isOpen, onClose, obus, onSelectResult }: Spotl
                       </span>
                     )}
                   </div>
-                  {result.matchedPaths && result.matchedPaths.length > 0 && (
+                  {result.matchedFields && result.matchedFields.length > 0 && (
                     <div className="spotlight-result-paths">
-                      {result.matchedPaths.map((path, i) => (
+                      {result.matchedFields.map((field, i) => (
                         <div key={i} className="spotlight-result-path">
                           <span className="path-arrow">→</span>
-                          <code>{path}</code>
+                          <code>{field.path}</code>
+                          <span className="path-value">= {formatFieldValue(field.value)}</span>
                         </div>
                       ))}
-                      {result.matchedPaths.length < (result.matchReason.match(/\d+/)?.[0] ? parseInt(result.matchReason.match(/\d+/)![0]) : 0) && (
+                      {result.matchedFields.length < (result.matchReason.match(/\d+/)?.[0] ? parseInt(result.matchReason.match(/\d+/)![0]) : 0) && (
                         <div className="spotlight-result-path-more">
-                          +{parseInt(result.matchReason.match(/\d+/)![0]) - result.matchedPaths.length} more...
+                          +{parseInt(result.matchReason.match(/\d+/)![0]) - result.matchedFields.length} more...
                         </div>
                       )}
                     </div>
@@ -296,16 +302,32 @@ export function SpotlightSearch({ isOpen, onClose, obus, onSelectResult }: Spotl
 }
 
 /**
+ * Format a field value for display in search results
+ */
+function formatFieldValue(value: any): string {
+  if (value === null || value === undefined) return 'null';
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  if (typeof value === 'number') return String(value);
+  if (typeof value === 'string') return `"${value}"`;
+  if (Array.isArray(value)) {
+    if (value.length <= 4) return `[${value.join(', ')}]`;
+    return `[${value.slice(0, 3).join(', ')}, ... (${value.length})]`;
+  }
+  if (typeof value === 'object') return '{...}';
+  return String(value);
+}
+
+/**
  * Recursively search for field names in an object
- * Returns array of paths where the field was found
+ * Returns array of {path, value} pairs where the field was found
  */
 function searchFieldsInObject(
   obj: any,
   searchTerm: string,
   currentPath: string = '',
   maxResults: number = 10
-): string[] {
-  const results: string[] = [];
+): FieldMatch[] {
+  const results: FieldMatch[] = [];
   const lowerSearch = searchTerm.toLowerCase();
 
   // Skip searching in these metadata fields
@@ -334,7 +356,7 @@ function searchFieldsInObject(
 
       // Check if this key matches
       if (key.toLowerCase().includes(lowerSearch)) {
-        results.push(newPath);
+        results.push({ path: newPath, value });
         if (results.length >= maxResults) return results;
       }
 

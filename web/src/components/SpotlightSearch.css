@@ -238,6 +238,14 @@
   color: #4a90e2;
 }
 
+.spotlight-result-path .path-value {
+  font-family: 'Monaco', 'Courier New', monospace;
+  font-size: 11px;
+  color: #e67e22;
+  font-weight: 600;
+  margin-left: 4px;
+}
+
 .spotlight-result-path-more {
   font-size: 11px;
   color: #999;
