@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { FileUpload } from './components/FileUpload';
 import { OBUBrowser } from './components/OBUBrowser';
+import { BitstreamStats } from './components/BitstreamStats';
 import { initWasm, parseAV2Bitstream, isWasmSupported } from './wasm/av2-parser';
 import './App.css';
 
@@ -14,6 +15,7 @@ type AppState =
 
 function App() {
   const [state, setState] = useState<AppState>({ status: 'init' });
+  const [activeTab, setActiveTab] = useState<'browser' | 'statistics'>('browser');
 
   useEffect(() => {
     // Check WASM support
@@ -138,22 +140,41 @@ function App() {
                   return parts.join(' • ');
                 })()}
               </p>
+              <div className="results-tabs">
+                <button
+                  className={`tab-btn ${activeTab === 'browser' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('browser')}
+                >
+                  Browser
+                </button>
+                <button
+                  className={`tab-btn ${activeTab === 'statistics' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('statistics')}
+                >
+                  Statistics
+                </button>
+              </div>
             </div>
-            <OBUBrowser
-              obus={state.result.obus}
-              onDownloadJson={() => {
-                const jsonStr = JSON.stringify(state.result, null, 2);
-                const blob = new Blob([jsonStr], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                const baseName = state.result.file.replace(/\.[^.]+$/, '');
-                a.download = `${baseName}.json`;
-                a.click();
-                URL.revokeObjectURL(url);
-              }}
-              onLoadAnother={handleReset}
-            />
+            {activeTab === 'browser' && (
+              <OBUBrowser
+                obus={state.result.obus}
+                onDownloadJson={() => {
+                  const jsonStr = JSON.stringify(state.result, null, 2);
+                  const blob = new Blob([jsonStr], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  const baseName = state.result.file.replace(/\.[^.]+$/, '');
+                  a.download = `${baseName}.json`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                onLoadAnother={handleReset}
+              />
+            )}
+            {activeTab === 'statistics' && (
+              <BitstreamStats obus={state.result.obus} />
+            )}
           </div>
         )}
       </main>
