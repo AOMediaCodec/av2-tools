@@ -116,30 +116,44 @@ function App() {
         {state.status === 'parsed' && (
           <div className="results-container">
             <div className="results-header">
-              <div>
-                <h3>{state.result.file}</h3>
-                <p className="file-info">{state.result.obu_count} OBUs parsed</p>
-              </div>
-              <div className="results-header-actions">
-                <button onClick={() => {
-                  const jsonStr = JSON.stringify(state.result, null, 2);
-                  const blob = new Blob([jsonStr], { type: 'application/json' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  const baseName = state.result.file.replace(/\.[^.]+$/, '');
-                  a.download = `${baseName}.json`;
-                  a.click();
-                  URL.revokeObjectURL(url);
-                }} className="btn-secondary">
-                  Download JSON
-                </button>
-                <button onClick={handleReset} className="btn-primary">
-                  Load Another File
-                </button>
-              </div>
+              <h3>{state.result.file}</h3>
+              <p className="file-info">
+                {(() => {
+                  const obus = state.result.obus;
+                  const totalBytes = obus.reduce((s: number, o: any) =>
+                    s + o.position.size_field_bytes + o.position.header_size + o.position.payload_size, 0);
+                  const tuCount = obus.filter((o: any) => o.type_name === 'TEMPORAL_DELIMITER').length;
+                  const xlayers = new Set(obus.map((o: any) => {
+                    if (o.header.extension_flag === 1) return o.header.xlayer_id;
+                    return (o.type_name === 'MSDO' || o.type_name === 'TEMPORAL_DELIMITER') ? 31 : 0;
+                  }));
+                  const sizeStr = totalBytes >= 1024 * 1024
+                    ? `${(totalBytes / (1024 * 1024)).toFixed(2)} MB`
+                    : `${(totalBytes / 1024).toFixed(2)} KB`;
+                  const parts = [sizeStr, `${obus.length} OBUs`, `${tuCount} TUs`];
+                  if (xlayers.size > 1) {
+                    const nonGlobal = [...xlayers].filter(x => x !== 31).length;
+                    parts.push(`${nonGlobal} xlayer${nonGlobal !== 1 ? 's' : ''}`);
+                  }
+                  return parts.join(' • ');
+                })()}
+              </p>
             </div>
-            <OBUBrowser obus={state.result.obus} />
+            <OBUBrowser
+              obus={state.result.obus}
+              onDownloadJson={() => {
+                const jsonStr = JSON.stringify(state.result, null, 2);
+                const blob = new Blob([jsonStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                const baseName = state.result.file.replace(/\.[^.]+$/, '');
+                a.download = `${baseName}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              onLoadAnother={handleReset}
+            />
           </div>
         )}
       </main>

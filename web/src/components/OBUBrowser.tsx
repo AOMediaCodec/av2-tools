@@ -5,6 +5,8 @@ import './OBUBrowser.css';
 
 interface OBUBrowserProps {
   obus: any[];
+  onDownloadJson?: () => void;
+  onLoadAnother?: () => void;
 }
 
 // Metadata unit header fields (fields present even when payload is not parsed)
@@ -134,7 +136,7 @@ function groupByTemporalUnit(obus: any[]): TUGroup[] {
   return groups;
 }
 
-export function OBUBrowser({ obus }: OBUBrowserProps) {
+export function OBUBrowser({ obus, onDownloadJson, onLoadAnother }: OBUBrowserProps) {
   const [expandedIndices, setExpandedIndices] = useState<Set<number>>(new Set());
   const [expandedTUs, setExpandedTUs] = useState<Set<number>>(new Set());
   const [isSpotlightOpen, setIsSpotlightOpen] = useState(false);
@@ -231,20 +233,6 @@ export function OBUBrowser({ obus }: OBUBrowserProps) {
     setExpandedIndices(new Set());
   };
 
-  // Calculate OBU type statistics
-  const typeStats = obus.reduce((acc, obu) => {
-    acc[obu.type_name] = (acc[obu.type_name] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-
-  const totalSize = obus.reduce(
-    (sum, obu) =>
-      sum + obu.position.size_field_bytes + obu.position.header_size + obu.position.payload_size,
-    0
-  );
-
-  const tuCount = tuGroups.filter(g => !g.isConfig).length;
-
   return (
     <div className="obu-browser">
       <SpotlightSearch
@@ -254,33 +242,27 @@ export function OBUBrowser({ obus }: OBUBrowserProps) {
         onSelectResult={handleSpotlightSelect}
       />
 
-      <div className="browser-header">
-        <h2>OBU Browser</h2>
-        <div className="browser-stats">
-          <span className="stat">
-            <strong>{obus.length}</strong> OBUs
-          </span>
-          <span className="stat">
-            <strong>{tuCount}</strong> TUs
-          </span>
-          <span className="stat">
-            <strong>{(totalSize / 1024).toFixed(2)}</strong> KB
-          </span>
-          <span className="stat">
-            <strong>{Object.keys(typeStats).length}</strong> types
-          </span>
-        </div>
-        <div className="browser-actions">
-          <button onClick={() => setIsSpotlightOpen(true)} className="btn-secondary btn-search">
-            🔍 Search <kbd>/</kbd>
+      <div className="browser-toolbar">
+        <button onClick={() => setIsSpotlightOpen(true)} className="btn-secondary btn-search">
+          🔍 Search <kbd>/</kbd>
+        </button>
+        <button onClick={expandAll} className="btn-secondary">
+          Expand All
+        </button>
+        <button onClick={collapseAll} className="btn-secondary">
+          Collapse All
+        </button>
+        <div className="toolbar-spacer" />
+        {onDownloadJson && (
+          <button onClick={onDownloadJson} className="btn-secondary">
+            Download JSON
           </button>
-          <button onClick={expandAll} className="btn-secondary">
-            Expand All
+        )}
+        {onLoadAnother && (
+          <button onClick={onLoadAnother} className="btn-secondary">
+            Load Another File
           </button>
-          <button onClick={collapseAll} className="btn-secondary">
-            Collapse All
-          </button>
-        </div>
+        )}
       </div>
 
       {xlayerFilter !== null && (
