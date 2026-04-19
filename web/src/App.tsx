@@ -140,37 +140,43 @@ function App() {
                   return parts.join(' • ');
                 })()}
               </p>
-              <div className="results-tabs">
-                <button
-                  className={`tab-btn ${activeTab === 'browser' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('browser')}
-                >
-                  Browser
-                </button>
-                <button
-                  className={`tab-btn ${activeTab === 'statistics' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('statistics')}
-                >
-                  Statistics
-                </button>
+              <div className="results-tabs-row">
+                <div className="results-tabs">
+                  <button
+                    className={`tab-btn ${activeTab === 'browser' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('browser')}
+                  >
+                    Browser
+                  </button>
+                  <button
+                    className={`tab-btn ${activeTab === 'statistics' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('statistics')}
+                  >
+                    Statistics
+                  </button>
+                </div>
+                <div className="results-actions">
+                  <button onClick={() => {
+                    const jsonStr = JSON.stringify(state.result, null, 2);
+                    const blob = new Blob([jsonStr], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    const baseName = state.result.file.replace(/\.[^.]+$/, '');
+                    a.download = `${baseName}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }} className="btn-secondary">
+                    Download JSON
+                  </button>
+                  <button onClick={handleReset} className="btn-secondary">
+                    Load Another File
+                  </button>
+                </div>
               </div>
             </div>
             {activeTab === 'browser' && (
-              <OBUBrowser
-                obus={state.result.obus}
-                onDownloadJson={() => {
-                  const jsonStr = JSON.stringify(state.result, null, 2);
-                  const blob = new Blob([jsonStr], { type: 'application/json' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  const baseName = state.result.file.replace(/\.[^.]+$/, '');
-                  a.download = `${baseName}.json`;
-                  a.click();
-                  URL.revokeObjectURL(url);
-                }}
-                onLoadAnother={handleReset}
-              />
+              <OBUBrowser obus={state.result.obus} />
             )}
             {activeTab === 'statistics' && (
               <BitstreamStats obus={state.result.obus} />

@@ -1,0 +1,75 @@
+.xlayer-graph-section {
+  margin-bottom: 16px;
+}
+
+.xlayer-graph-label {
+  padding: 4px 12px;
+  border-left: 3px solid #999;
+  font-family: 'Monaco', 'Courier New', monospace;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.frame-dependency-graph {
+  overflow-x: auto;
+  overflow-y: visible;
+  padding: 8px 0;
+}
+
+.frame-dependency-graph svg {
+  display: block;
+  min-width: 100%;
+}
+
+.frame-dependency-graph .frame-cell {
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.frame-dependency-graph .frame-cell:hover rect {
+  stroke-width: 2.5;
+}
+
+.frame-dependency-graph .frame-cell.dimmed {
+  opacity: 0.15;
+}
+
+.frame-dependency-graph .frame-cell.highlighted rect {
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 4px rgba(0,0,0,0.3));
+}
+
+.frame-dependency-graph .dep-arrow {
+  transition: opacity 0.15s;
+}
+
+.frame-dependency-graph .dep-arrow.dimmed {
+  opacity: 0.05;
+}
+
+.frame-dependency-graph .dep-arrow.highlighted {
+  opacity: 1;
+  stroke-width: 2;
+}
+
+.frame-graph-legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  font-size: 11px;
+  color: #666;
+}
+
+.frame-graph-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.frame-graph-legend-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid #999;
+}

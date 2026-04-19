@@ -2,8 +2,8 @@ import { useMemo } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   PieChart, Pie, Cell, ResponsiveContainer,
-  AreaChart, Area, ReferenceLine
 } from 'recharts';
+import { FrameDependencyGraph } from './FrameDependencyGraph';
 import './BitstreamStats.css';
 
 interface BitstreamStatsProps {
@@ -162,24 +162,6 @@ export function BitstreamStats({ obus }: BitstreamStatsProps) {
     });
   }, [tuData, xlayerIds, isMultiLayer]);
 
-  // Cumulative size data
-  const cumulativeData = useMemo(() => {
-    let cumulative = 0;
-    return tuData.filter(tu => tu.label !== 'Config').map(tu => {
-      cumulative += tu.totalSize;
-      return {
-        name: tu.label,
-        cumulative,
-        keyframe: tu.keyframeType,
-      };
-    });
-  }, [tuData]);
-
-  // Keyframe TU indices for reference lines
-  const keyframeTUs = tuData
-    .filter(tu => tu.keyframeType && tu.label !== 'Config')
-    .map(tu => tu.label);
-
   // Layer breakdown data (for multi-layer)
   const layerData = useMemo(() => {
     if (!isMultiLayer) return [];
@@ -213,6 +195,9 @@ export function BitstreamStats({ obus }: BitstreamStatsProps) {
 
   return (
     <div className="bitstream-stats">
+      {/* Frame dependency graph — full width */}
+      <FrameDependencyGraph obus={obus} />
+
       <div className="stats-grid">
         {/* TU Size Chart */}
         <div className="chart-card">
@@ -267,25 +252,6 @@ export function BitstreamStats({ obus }: BitstreamStatsProps) {
                 ))}
               </Bar>
             </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Cumulative Size */}
-        <div className="chart-card">
-          <h3>Cumulative Size (Decode Order)</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <AreaChart data={cumulativeData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" fontSize={11} />
-              <YAxis tickFormatter={(v) => formatSize(v)} fontSize={11} />
-              <Tooltip content={<CustomTooltip />} />
-              <Area type="monotone" dataKey="cumulative" name="Cumulative"
-                stroke="#1976d2" fill="#e3f2fd" />
-              {keyframeTUs.map((name, i) => (
-                <ReferenceLine key={i} x={name} stroke="#6a1b9a"
-                  strokeDasharray="3 3" label={{ value: 'KF', fontSize: 9, fill: '#6a1b9a' }} />
-              ))}
-            </AreaChart>
           </ResponsiveContainer>
         </div>
 

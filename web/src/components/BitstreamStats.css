@@ -21,6 +21,11 @@
   padding: 16px;
 }
 
+.chart-card-full {
+  grid-column: 1 / -1;
+  margin-bottom: 0;
+}
+
 .chart-card h3 {
   margin: 0 0 12px 0;
   font-size: 14px;

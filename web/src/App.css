@@ -160,11 +160,23 @@ body {
   margin-bottom: 0;
 }
 
+.results-tabs-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-top: 12px;
+  border-bottom: 2px solid #e0e0e0;
+}
+
 .results-tabs {
   display: flex;
   gap: 0;
-  margin-top: 12px;
-  border-bottom: 2px solid #e0e0e0;
+}
+
+.results-actions {
+  display: flex;
+  gap: 8px;
+  padding-bottom: 6px;
 }
 
 .tab-btn {

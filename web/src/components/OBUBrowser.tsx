@@ -5,8 +5,6 @@ import './OBUBrowser.css';
 
 interface OBUBrowserProps {
   obus: any[];
-  onDownloadJson?: () => void;
-  onLoadAnother?: () => void;
 }
 
 // Metadata unit header fields (fields present even when payload is not parsed)
@@ -172,7 +170,7 @@ function groupByTemporalUnit(obus: any[]): TUGroup[] {
   return groups;
 }
 
-export function OBUBrowser({ obus, onDownloadJson, onLoadAnother }: OBUBrowserProps) {
+export function OBUBrowser({ obus }: OBUBrowserProps) {
   const [expandedIndices, setExpandedIndices] = useState<Set<number>>(new Set());
   const [expandedTUs, setExpandedTUs] = useState<Set<number>>(new Set());
   const [isSpotlightOpen, setIsSpotlightOpen] = useState(false);
@@ -288,17 +286,6 @@ export function OBUBrowser({ obus, onDownloadJson, onLoadAnother }: OBUBrowserPr
         <button onClick={collapseAll} className="btn-secondary">
           Collapse All
         </button>
-        <div className="toolbar-spacer" />
-        {onDownloadJson && (
-          <button onClick={onDownloadJson} className="btn-secondary">
-            Download JSON
-          </button>
-        )}
-        {onLoadAnother && (
-          <button onClick={onLoadAnother} className="btn-secondary">
-            Load Another File
-          </button>
-        )}
       </div>
 
       {xlayerFilter !== null && (
