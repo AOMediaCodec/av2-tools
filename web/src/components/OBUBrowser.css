@@ -272,6 +272,11 @@
   line-height: 14px;
 }
 
+.obu-warning {
+  font-size: 14px;
+  cursor: help;
+}
+
 /* Xlayer badge - color-coded, clickable */
 .xlayer-badge {
   display: inline-block;

@@ -38,6 +38,42 @@ function isKnownButNotImplemented(metadataUnit: any): boolean {
   return !isUnknownOrReserved && !hasMetadataPayload(metadataUnit);
 }
 
+// OBU types that have no payload by design
+const EMPTY_PAYLOAD_TYPES = new Set(['TEMPORAL_DELIMITER', 'PADDING']);
+
+// Detect client-side warnings for an OBU based on its JSON structure
+function getObuWarnings(obu: any): string[] {
+  const warnings: string[] = [];
+  const payloadFields = Object.keys(obu).filter(
+    k => k !== 'type_name' && k !== 'position' && k !== 'header'
+  );
+  const hasPayload = obu.position.payload_size > 0;
+  const hasParsedContent = payloadFields.length > 0;
+
+  // Stub OBU: has payload bytes but no parsed fields
+  if (hasPayload && !hasParsedContent && !EMPTY_PAYLOAD_TYPES.has(obu.type_name)) {
+    warnings.push(`Payload not parsed (${obu.position.payload_size} bytes)`);
+  }
+
+  // Frame OBU without frame header (missing sequence header at parse time)
+  const frameTypes = new Set([
+    'CLK', 'OLK', 'REGULAR_TILE_GROUP', 'LEADING_TILE_GROUP',
+    'SWITCH', 'RAS_FRAME'
+  ]);
+  if (frameTypes.has(obu.type_name) && hasParsedContent && !obu.tile_group) {
+    warnings.push('Frame header not parsed (no active sequence header?)');
+  }
+
+  const sefTipTypes = new Set([
+    'REGULAR_SEF', 'LEADING_SEF', 'REGULAR_TIP', 'LEADING_TIP'
+  ]);
+  if (sefTipTypes.has(obu.type_name) && hasParsedContent && !obu.frame_header) {
+    warnings.push('Frame header not parsed (no active sequence header?)');
+  }
+
+  return warnings;
+}
+
 // Render metadata unit with "not parsed" message if needed
 function MetadataUnitViewer({ unit, label }: { unit: any; label?: string }) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -313,6 +349,7 @@ export function OBUBrowser({ obus, onDownloadJson, onLoadAnother }: OBUBrowserPr
                     const xlayerBorderClass = `xlayer-border-${isGlobal ? 'global' : Math.min(xlayerId, 4)}`;
 
                     const hasPayload = obu.position.payload_size > 0;
+                    const obuWarnings = getObuWarnings(obu);
 
                     return (
                       <div
@@ -330,6 +367,9 @@ export function OBUBrowser({ obus, onDownloadJson, onLoadAnother }: OBUBrowserPr
                           </span>
                           <span className="obu-offset">@{obu.position.file_offset}</span>
                           <span className="obu-size">{obuTotalSize} B</span>
+                          {obuWarnings.length > 0 && (
+                            <span className="obu-warning" title={obuWarnings.join('\n')}>⚠️</span>
+                          )}
                           <span className="obu-layers">
                             {hasExtension && <span className="ext-flag" title="obu_header_extension_flag = 1">E</span>}
                             <span className="tm-info">
