@@ -120,9 +120,24 @@ function App() {
                 <h3>{state.result.file}</h3>
                 <p className="file-info">{state.result.obu_count} OBUs parsed</p>
               </div>
-              <button onClick={handleReset} className="btn-primary">
-                Load Another File
-              </button>
+              <div className="results-header-actions">
+                <button onClick={() => {
+                  const jsonStr = JSON.stringify(state.result, null, 2);
+                  const blob = new Blob([jsonStr], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  const baseName = state.result.file.replace(/\.[^.]+$/, '');
+                  a.download = `${baseName}.json`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }} className="btn-secondary">
+                  Download JSON
+                </button>
+                <button onClick={handleReset} className="btn-primary">
+                  Load Another File
+                </button>
+              </div>
             </div>
             <OBUBrowser obus={state.result.obus} />
           </div>

@@ -138,6 +138,7 @@ export function OBUBrowser({ obus }: OBUBrowserProps) {
   const [expandedIndices, setExpandedIndices] = useState<Set<number>>(new Set());
   const [expandedTUs, setExpandedTUs] = useState<Set<number>>(new Set());
   const [isSpotlightOpen, setIsSpotlightOpen] = useState(false);
+  const [xlayerFilter, setXlayerFilter] = useState<number | null>(null);
   const obuRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
   const tuGroups = useMemo(() => groupByTemporalUnit(obus), [obus]);
@@ -220,7 +221,9 @@ export function OBUBrowser({ obus }: OBUBrowserProps) {
 
   const expandAll = () => {
     setExpandedTUs(new Set(tuGroups.map((_, i) => i)));
-    setExpandedIndices(new Set(obus.map((_, i) => i)));
+    const expandable = new Set<number>();
+    obus.forEach((o, i) => { if (o.position.payload_size > 0) expandable.add(i); });
+    setExpandedIndices(expandable);
   };
 
   const collapseAll = () => {
@@ -280,6 +283,17 @@ export function OBUBrowser({ obus }: OBUBrowserProps) {
         </div>
       </div>
 
+      {xlayerFilter !== null && (
+        <div className="xlayer-filter-bar">
+          <span>Filtering:</span>
+          <span className={`xlayer-badge xlayer-${xlayerFilter === 31 ? 'global' : Math.min(xlayerFilter, 4)}`}>
+            {xlayerFilter === 31 ? 'GL' : `X${xlayerFilter}`}
+          </span>
+          <span>(global OBUs always shown)</span>
+          <button className="filter-clear" onClick={() => setXlayerFilter(null)}>Clear filter</button>
+        </div>
+      )}
+
       <div className="obu-list">
         {tuGroups.map((group, groupIndex) => {
           const isTUExpanded = expandedTUs.has(groupIndex);
@@ -304,6 +318,19 @@ export function OBUBrowser({ obus }: OBUBrowserProps) {
                     const isExpanded = expandedIndices.has(globalIndex);
                     const obuTotalSize =
                       obu.position.size_field_bytes + obu.position.header_size + obu.position.payload_size;
+                    const hasExtension = obu.header.extension_flag === 1;
+                    // Derive xlayer_id per spec: when no extension, MSDO/TD are global, others are 0
+                    const typeName = obu.type_name;
+                    const xlayerId = hasExtension
+                      ? obu.header.xlayer_id
+                      : (typeName === 'MSDO' || typeName === 'TEMPORAL_DELIMITER') ? 31 : 0;
+                    const mlayerId = hasExtension ? obu.header.mlayer_id : 0;
+                    const tlayerId = obu.header.tlayer_id;  // always in byte 1
+                    const isGlobal = xlayerId === 31;
+                    const isFilteredOut = xlayerFilter !== null && xlayerId !== xlayerFilter && !isGlobal;
+                    const xlayerBorderClass = `xlayer-border-${isGlobal ? 'global' : Math.min(xlayerId, 4)}`;
+
+                    const hasPayload = obu.position.payload_size > 0;
 
                     return (
                       <div
@@ -311,60 +338,38 @@ export function OBUBrowser({ obus }: OBUBrowserProps) {
                         ref={(el) => {
                           if (el) obuRefs.current.set(globalIndex, el);
                         }}
-                        className={`obu-item ${isExpanded ? 'expanded' : ''}`}
+                        className={`obu-item ${isExpanded ? 'expanded' : ''} ${xlayerBorderClass} ${isFilteredOut ? 'xlayer-filtered-out' : ''}`}
                       >
-                        <div className="obu-header" onClick={() => toggleExpand(globalIndex)}>
-                          <span className="expand-icon">{isExpanded ? '▼' : '▶'}</span>
+                        <div className={`obu-header ${hasPayload ? '' : 'no-payload'}`} onClick={() => hasPayload && toggleExpand(globalIndex)}>
+                          <span className="expand-icon">{hasPayload ? (isExpanded ? '▼' : '▶') : ' '}</span>
                           <span className="obu-index">#{globalIndex}</span>
                           <span className={`obu-type type-${obu.type_name.toLowerCase()}`}>
-                            {obu.type_name}
+                            {obu.type_name} ({obu.header.obu_type})
                           </span>
                           <span className="obu-offset">@{obu.position.file_offset}</span>
                           <span className="obu-size">{obuTotalSize} B</span>
-                          {obu.header.extension_flag ? (
-                            <span className="obu-layers">
-                              T{obu.header.tlayer_id}/M{obu.header.mlayer_id}/X{obu.header.xlayer_id}
+                          <span className="obu-layers">
+                            {hasExtension && <span className="ext-flag" title="obu_header_extension_flag = 1">E</span>}
+                            <span className="tm-info">
+                              T{tlayerId} M{mlayerId}
                             </span>
-                          ) : null}
+                              <span
+                                className={`xlayer-badge xlayer-${isGlobal ? 'global' : Math.min(xlayerId, 4)} ${xlayerFilter === xlayerId ? 'active' : ''}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setXlayerFilter(xlayerFilter === xlayerId ? null : xlayerId);
+                                }}
+                                title={`Click to ${xlayerFilter === xlayerId ? 'clear' : 'filter to'} xlayer ${isGlobal ? 'GL (global)' : xlayerId}`}
+                              >
+                                {isGlobal ? 'GL' : `X${xlayerId}`}
+                              </span>
+                            </span>
                         </div>
 
                         {isExpanded && (
                           <div className="obu-details">
-                            <div className="detail-section">
-                              <h4>OBU Header</h4>
-                              <table className="detail-table">
-                                <tbody>
-                                  <tr>
-                                    <td>OBU Type:</td>
-                                    <td>{obu.header.obu_type}</td>
-                                  </tr>
-                                  <tr>
-                                    <td>Extension flag:</td>
-                                    <td>{obu.header.extension_flag}</td>
-                                  </tr>
-                                  {obu.header.extension_flag ? (
-                                    <>
-                                      <tr>
-                                        <td>obu_tlayer_id:</td>
-                                        <td>{obu.header.tlayer_id}</td>
-                                      </tr>
-                                      <tr>
-                                        <td>obu_mlayer_id:</td>
-                                        <td>{obu.header.mlayer_id}</td>
-                                      </tr>
-                                      <tr>
-                                        <td>obu_xlayer_id:</td>
-                                        <td>{obu.header.xlayer_id}</td>
-                                      </tr>
-                                    </>
-                                  ) : null}
-                                </tbody>
-                              </table>
-                            </div>
-
                             {obu.position.payload_size > 0 && (
                             <div className="detail-section">
-                              <h4>OBU Payload</h4>
                               {Object.keys(obu).some(
                                 (k) => k !== 'type_name' && k !== 'position' && k !== 'header'
                               ) ? (

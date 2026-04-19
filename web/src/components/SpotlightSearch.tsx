@@ -220,12 +220,23 @@ export function SpotlightSearch({ isOpen, onClose, obus, onSelectResult }: Spotl
                   </div>
                   <div className="spotlight-result-meta">
                     <span className="spotlight-result-reason">{result.matchReason}</span>
-                    {result.obu.header.extension_flag === 1 && (
-                      <span className="spotlight-result-layers">
-                        T{result.obu.header.tlayer_id}/M{result.obu.header.mlayer_id}/X
-                        {result.obu.header.xlayer_id}
-                      </span>
-                    )}
+                    {(() => {
+                      const hasExt = result.obu.header.extension_flag === 1;
+                      const tn = result.obu.type_name;
+                      const xl = hasExt ? result.obu.header.xlayer_id
+                        : (tn === 'MSDO' || tn === 'TEMPORAL_DELIMITER') ? 31 : 0;
+                      const ml = hasExt ? result.obu.header.mlayer_id : 0;
+                      const tl = result.obu.header.tlayer_id;
+                      const isGlobal = xl === 31;
+                      return (
+                        <span className="spotlight-result-layers">
+                          <span className="tm-info">T{tl} M{ml}</span>
+                          <span className={`xlayer-badge xlayer-${isGlobal ? 'global' : Math.min(xl, 4)}`}>
+                            {isGlobal ? 'GL' : `X${xl}`}
+                          </span>
+                        </span>
+                      );
+                    })()}
                   </div>
                   {result.matchedFields && result.matchedFields.length > 0 && (
                     <div className="spotlight-result-paths">
