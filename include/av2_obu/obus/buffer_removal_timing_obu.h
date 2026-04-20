@@ -13,9 +13,11 @@
 
 #include <av2_obu/core/base_obu.h>
 
+#include <vector>
+
 namespace av2_obu {
 
-// Buffer Removal Timing OBU
+// Buffer Removal Timing OBU (OBU_BUFFER_REMOVAL_TIMING)
 class BufferRemovalTimingOBU : public BaseOBU {
 public:
   explicit BufferRemovalTimingOBU(const OBUPosition& pos) : BaseOBU(pos) {}
@@ -23,8 +25,28 @@ public:
   json to_json() const override;
   std::string type_name() const override { return "BUFFER_REMOVAL_TIMING"; }
 
+  // Per operating point timing entry
+  struct OpTiming {
+    uint32_t decoder_model_present = 0;
+    uint32_t br_time_op = 0;
+  };
+
+  uint32_t br_ops_dependent_flag() const { return br_ops_dependent_flag_; }
+  uint32_t br_ops_id() const { return br_ops_id_; }
+  uint32_t br_ops_cnt() const { return br_ops_cnt_; }
+  uint32_t br_time() const { return br_time_; }
+  const std::vector<OpTiming>& op_timings() const { return op_timings_; }
+
 protected:
   bool parse_payload(std::ifstream& ifs) override;
+
+private:
+  uint32_t br_ops_dependent_flag_ = 0;
+  uint32_t br_ops_id_ = 0;
+  uint32_t br_ops_cnt_ = 0;
+  uint32_t br_time_ = 0;
+  std::vector<OpTiming> op_timings_;
+  bool parsed_ = false;
 };
 
 }  // namespace av2_obu
