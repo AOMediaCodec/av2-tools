@@ -11,6 +11,8 @@
 
 #include <spdlog/spdlog.h>
 
+#include <av2_obu/core/av2_sequence_header.h>
+#include <av2_obu/core/bitstream_reader.h>
 #include <av2_obu/obus/bridge_frame_obu.h>
 
 namespace av2_obu {
@@ -18,22 +20,34 @@ namespace av2_obu {
 bool BridgeFrameOBU::parse_payload(std::ifstream& ifs) {
   spdlog::debug("Parsing BRIDGE_FRAME payload ({} bytes)", position_.payload_size);
 
-  // Read raw payload
   raw_payload_.resize(position_.payload_size);
   if (!ifs.read(reinterpret_cast<char*>(raw_payload_.data()), position_.payload_size)) {
     spdlog::error("Failed to read BRIDGE_FRAME payload");
     return false;
   }
 
-  // TODO: Implement BRIDGE_FRAME parsing
-  spdlog::warn("BRIDGE_FRAME parsing not yet implemented");
+  if (active_seq_header_) {
+    BitstreamReader br(raw_payload_);
+    if (!frame_header_.parse_lightweight(br, OBUType::BRIDGE_FRAME, *active_seq_header_)) {
+      spdlog::error("Failed to parse BRIDGE_FRAME frame header");
+      return false;
+    }
+    spdlog::debug("BRIDGE_FRAME: order_hint={}, refresh_flags=0x{:02x}, {}x{}",
+                  frame_header_.order_hint, frame_header_.refresh_frame_flags,
+                  frame_header_.FrameWidth, frame_header_.FrameHeight);
+  } else {
+    spdlog::warn("BRIDGE_FRAME: no active sequence header — frame header not parsed");
+  }
+
   return true;
 }
 
 json BridgeFrameOBU::to_json() const {
   json j = BaseOBU::to_json();
   j["type_name"] = "BRIDGE_FRAME";
-  // TODO: Add BRIDGE_FRAME-specific fields
+  if (frame_header_.parsed) {
+    j["frame_header"] = frame_header_.to_json();
+  }
   return j;
 }
 

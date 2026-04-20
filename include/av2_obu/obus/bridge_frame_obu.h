@@ -12,10 +12,11 @@
 #pragma once
 
 #include <av2_obu/core/base_obu.h>
+#include <av2_obu/core/frame_header_info.h>
 
 namespace av2_obu {
 
-// Bridge Frame OBU
+// Bridge Frame OBU (OBU_BRIDGE_FRAME)
 class BridgeFrameOBU : public BaseOBU {
 public:
   explicit BridgeFrameOBU(const OBUPosition& pos) : BaseOBU(pos) {}
@@ -23,8 +24,13 @@ public:
   json to_json() const override;
   std::string type_name() const override { return "BRIDGE_FRAME"; }
 
+  const FrameHeaderInfo& frame_header() const { return frame_header_; }
+
 protected:
   bool parse_payload(std::ifstream& ifs) override;
+
+private:
+  FrameHeaderInfo frame_header_;
 };
 
 }  // namespace av2_obu
