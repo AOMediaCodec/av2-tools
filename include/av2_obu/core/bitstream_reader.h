@@ -59,6 +59,11 @@ public:
   // tu(mx) - Truncated unary encoding with maximum value mx
   uint32_t read_tu(uint32_t mx);
 
+  // trailing_bits() - Read trailing bits pattern (1 followed by 0s to byte boundary).
+  // Returns true if the pattern is valid (1 + zero padding), false otherwise.
+  // nbBits is the number of trailing bits to read.
+  bool read_trailing_bits(size_t nbBits);
+
   // Byte align (skip to next byte boundary)
   void byte_align();
 

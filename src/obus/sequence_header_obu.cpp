@@ -34,19 +34,13 @@ bool SequenceHeaderOBU::parse_payload(std::ifstream& ifs) {
       return false;
     }
 
-    // Check if there are remaining bits after parsing
-    size_t bits_consumed = br.bits_read();
+    // Check for trailing_bits()
     size_t bits_remaining = br.bits_remaining();
-    size_t total_bits = position_.payload_size * 8;
-
-    spdlog::debug("Sequence header parsing: consumed {} bits out of {} total ({} remaining)",
-                  bits_consumed, total_bits, bits_remaining);
 
     if (bits_remaining > 0) {
-      spdlog::warn(
-        "Sequence header has {} unused bits (payload may contain trailing bits or parsing "
-        "incomplete)",
-        bits_remaining);
+      if (!br.read_trailing_bits(bits_remaining)) {
+        spdlog::warn("Sequence header has invalid trailing bits ({} bits)", bits_remaining);
+      }
     }
 
     spdlog::debug("Successfully parsed AV2 sequence header");

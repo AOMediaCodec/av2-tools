@@ -212,6 +212,37 @@ uint32_t BitstreamReader::read_tu(uint32_t mx) {
   return mx;
 }
 
+bool BitstreamReader::read_trailing_bits(size_t nbBits) {
+  if (nbBits == 0 || nbBits > 8) {
+    spdlog::warn("Invalid trailing_bits count: {} (expected 1-8)", nbBits);
+    return false;
+  }
+
+  if (!has_bits(nbBits)) {
+    spdlog::warn("Not enough bits for trailing_bits (need {}, have {})", nbBits, bits_remaining());
+    return false;
+  }
+
+  // trailing_one_bit f(1) — must be 1
+  uint32_t trailing_one = read_bit();
+  if (trailing_one != 1) {
+    spdlog::warn("trailing_bits: expected leading 1 bit, got 0");
+    return false;
+  }
+
+  // trailing_zero_bit f(1) — remaining bits must all be 0
+  for (size_t i = 1; i < nbBits; i++) {
+    uint32_t zero_bit = read_bit();
+    if (zero_bit != 0) {
+      spdlog::warn("trailing_bits: expected 0 at position {}, got 1", i);
+      return false;
+    }
+  }
+
+  spdlog::debug("trailing_bits({}) parsed successfully", nbBits);
+  return true;
+}
+
 void BitstreamReader::byte_align() {
   if (bit_pos_ % 8 != 0) {
     bit_pos_ = ((bit_pos_ / 8) + 1) * 8;
