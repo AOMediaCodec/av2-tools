@@ -24,7 +24,8 @@ export interface FrameNode {
 
 interface RefSlot {
   valid: boolean;
-  orderHint: number;
+  orderHint: number;       // absolute display order (with gopBase)
+  specOrderHint: number;   // raw spec-level OrderHint (without gopBase, for unwrap)
   decodeIndex: number;
   isOutput: boolean;
 }
@@ -43,8 +44,14 @@ function getObuSize(obu: any): number {
 }
 
 /**
- * Unwrap modular order_hint to absolute display order.
- * Spec: get_disp_order_hint() in section 5.9.2
+ * Compute absolute display order from order_hint LSBs.
+ *
+ * The spec's get_disp_order_hint() uses modular arithmetic that wraps
+ * within OrderHintBits range. For visualization we need globally unique
+ * display orders across GOPs. We do the spec-level unwrap using raw
+ * (non-offset) ref order hints, then add gopBase for global uniqueness.
+ *
+ * refOrderHints[] contains the raw spec-level OrderHint values (without gopBase).
  */
 function getDispOrderHint(
   orderHintLsbs: number,
@@ -56,24 +63,24 @@ function getDispOrderHint(
   orderHintBits: number,
   gopBase: number
 ): number {
-  // CLK: return raw LSBs + GOP base (fresh start)
+  // CLK / restricted SWITCH: raw LSBs (spec returns OrderHintLsbs directly)
   if (obuType === 'CLK') {
     return gopBase + orderHintLsbs;
   }
-
-  // Restricted SWITCH: return raw LSBs + GOP base
   if (!isSEF && frameType === 'SWITCH_FRAME' && restrictedPredictionSwitch) {
     return gopBase + orderHintLsbs;
   }
 
-  // Normal path: unwrap using max of valid showable refs
-  let maxDisp = gopBase;
+  // Spec: get_max_disp_order_hint(onlyShowable=1)
+  // Uses raw spec-level order hints from refSlots
+  let maxDisp = 0;
   for (const slot of refSlots) {
-    if (slot.valid && slot.orderHint >= 0 && slot.isOutput) {
-      maxDisp = Math.max(maxDisp, slot.orderHint);
+    if (slot.valid && slot.specOrderHint >= 0 && slot.isOutput) {
+      maxDisp = Math.max(maxDisp, slot.specOrderHint);
     }
   }
 
+  // Spec: unwrap OrderHintLsbs relative to maxDisp
   let dispOrderHint = orderHintLsbs;
   if (orderHintBits > 0) {
     const halfRange = 1 << (orderHintBits - 1);
@@ -82,7 +89,9 @@ function getDispOrderHint(
       dispOrderHint += (((offset >> orderHintBits) + 1) << orderHintBits);
     }
   }
-  return dispOrderHint;
+
+  // Add gopBase for globally unique display order
+  return gopBase + dispOrderHint;
 }
 
 /**
@@ -142,7 +151,7 @@ function computeSingleLayerGraph(
   xlayerId: number
 ): FrameNode[] {
   const refSlots: RefSlot[] = Array.from({ length: numRefFrames }, () => ({
-    valid: false, orderHint: -1, decodeIndex: -1, isOutput: false,
+    valid: false, orderHint: -1, specOrderHint: -1, decodeIndex: -1, isOutput: false,
   }));
 
   const frames: FrameNode[] = [];
@@ -273,7 +282,13 @@ function computeSingleLayerGraph(
     // Update reference buffer
     for (let i = 0; i < numRefFrames; i++) {
       if ((refreshFlags >> i) & 1) {
-        refSlots[i] = { valid: true, orderHint: displayOrder, decodeIndex, isOutput };
+        refSlots[i] = {
+          valid: true,
+          orderHint: displayOrder,
+          specOrderHint: displayOrder - gopBase,
+          decodeIndex,
+          isOutput,
+        };
       }
     }
 
