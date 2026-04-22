@@ -119,9 +119,7 @@ private:
   uint32_t ops_ptl_present_flag_ = 0;
   uint32_t ops_color_info_present_flag_ = 0;
   uint32_t ops_mlayer_info_idc_ = 0;
-  uint32_t obu_extension_flag_ = 0;
   std::vector<OperatingPoint> operating_points_;
-  bool parsed_ = false;
 };
 
 }  // namespace av2_obu

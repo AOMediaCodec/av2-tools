@@ -239,7 +239,10 @@ bool LayerConfigurationRecordOBU::parse_payload(std::ifstream& ifs) {
     local_xlayer_info_ = parse_xlayer_info(br, false, lcr_local_atlas_id_present_flag_);
   }
 
-  parsed_ = true;
+  // Parse obu_extension_flag + trailing_bits (extensible OBU)
+  if (!parse_obu_trailing_bits(br))
+    return false;
+
   spdlog::debug("LCR: {} mode, xlayer_map=0x{:08x}, {} xlayers", is_global_ ? "global" : "local",
                 lcr_xlayer_map_, xlayer_ids_.size());
   return true;

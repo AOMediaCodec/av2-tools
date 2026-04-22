@@ -286,11 +286,9 @@ struct AV2SequenceHeader {
 
   uint32_t film_grain_params_present = 0;
 
-  // obu_extension_flag: currently defined in open_bitstream_unit() for
-  // is_extensible_obu() types (SH, MFH, LCR, CI, OPS, Atlas Segment).
-  // We parse it as part of the SH payload. We should really change the spec, this is super confusing.
-  // re-open https://github.com/AOMediaCodec/av2-spec-internal/issues/488
-  uint32_t obu_extension_flag = 0;
+  // NOTE: obu_extension_flag is parsed at the obu_payload() level by
+  // BaseOBU::parse_obu_trailing_bits(), not as part of sequence_header_obu().
+  // See: https://github.com/AOMediaCodec/av2-spec-internal/issues/488
 
   // Helper: get sequence superblock size as BlockSize enum (spec: get_seq_sb_size())
   BlockSize get_seq_sb_size() const;

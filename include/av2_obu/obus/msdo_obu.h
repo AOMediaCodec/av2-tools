@@ -51,7 +51,6 @@ private:
   uint32_t multistream_large_picture_idc_ = 0;
   uint32_t multistream_doh_constraint_flag_ = 0;
   std::vector<StreamInfo> streams_;
-  bool parsed_ = false;
 };
 
 }  // namespace av2_obu

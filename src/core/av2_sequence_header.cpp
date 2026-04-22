@@ -989,8 +989,9 @@ bool AV2SequenceHeader::parse(BitstreamReader& br) {
 
   film_grain_params_present = br.read_bit();
 
-  // https://github.com/AOMediaCodec/av2-spec-internal/issues/488
-  obu_extension_flag = br.read_bit();
+  // NOTE: obu_extension_flag is NOT part of sequence_header_obu() in the spec.
+  // It belongs to obu_payload() and is parsed by BaseOBU::parse_obu_trailing_bits().
+  // We should fix this: https://github.com/AOMediaCodec/av2-spec-internal/issues/488
 
   spdlog::debug("Successfully parsed AV2 Sequence Header");
   return true;
@@ -1024,8 +1025,7 @@ json AV2SequenceHeader::to_json() const {
             {"tqe_config", tqe_config.to_json()},
             {"filter_config", filter_config.to_json()},
             {"tile_config", tile_config.to_json()},
-            {"film_grain_params_present", film_grain_params_present},
-            {"obu_extension_flag", obu_extension_flag}};
+            {"film_grain_params_present", film_grain_params_present}};
 
   if (seq_cropping_window_present_flag) {
     j["cropping_window"] = {{"left", seq_cropping_win_left_offset},

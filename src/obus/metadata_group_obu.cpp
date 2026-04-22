@@ -63,6 +63,10 @@ bool MetadataGroupOBU::parse_payload(std::ifstream& ifs) {
       units_.push_back(unit);
     }
 
+    // Parse trailing_bits (non-extensible OBU)
+    if (!parse_obu_trailing_bits(br))
+      return false;
+
     spdlog::debug("Successfully parsed all {} metadata units", units_.size());
     return true;
 

@@ -46,7 +46,6 @@ private:
   uint32_t br_ops_cnt_ = 0;
   uint32_t br_time_ = 0;
   std::vector<OpTiming> op_timings_;
-  bool parsed_ = false;
 };
 
 }  // namespace av2_obu

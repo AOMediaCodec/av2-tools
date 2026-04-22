@@ -45,7 +45,10 @@ bool BufferRemovalTimingOBU::parse_payload(std::ifstream& ifs) {
     br_time_ = br.read_rg(4);
   }
 
-  parsed_ = true;
+  // Parse trailing_bits (non-extensible OBU)
+  if (!parse_obu_trailing_bits(br))
+    return false;
+
   spdlog::debug("BRT: ops_dependent={}, br_time={}", br_ops_dependent_flag_, br_time_);
   return true;
 }

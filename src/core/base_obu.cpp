@@ -242,13 +242,20 @@ bool BaseOBU::parse(std::ifstream& ifs) {
     return false;
   }
 
+  parsed_ = true;
   spdlog::debug("Successfully parsed {} (size={})", type_name(), position_.payload_size);
   return true;
 }
 
 json BaseOBU::to_json() const {
-  return json{
-    {"type_name", type_name()}, {"position", position_.to_json()}, {"header", header_.to_json()}};
+  json j = {{"type_name", type_name()},
+            {"parsed", parsed_},
+            {"position", position_.to_json()},
+            {"header", header_.to_json()}};
+  if (is_extensible_obu(type())) {
+    j["obu_extension_flag"] = obu_extension_flag_;
+  }
+  return j;
 }
 
 std::string BaseOBU::type_name() const {
@@ -258,6 +265,40 @@ std::string BaseOBU::type_name() const {
 bool BaseOBU::skip_payload(std::ifstream& ifs) {
   ifs.seekg(position_.end_pos);
   return ifs.good();
+}
+
+bool BaseOBU::parse_obu_trailing_bits(BitstreamReader& br) {
+  size_t remainingPayloadBits = br.bits_remaining();
+  if (remainingPayloadBits == 0) {
+    spdlog::warn("{}: no remaining bits for trailing_bits()", type_name());
+    return false;
+  }
+
+  if (is_extensible_obu(type())) {
+    obu_extension_flag_ = br.read_bit();
+    spdlog::debug("{}: obu_extension_flag = {}, remaining = {} bits", type_name(),
+                  obu_extension_flag_, remainingPayloadBits - 1);
+
+    if (obu_extension_flag_) {
+      size_t extensionBits = remainingPayloadBits - 1;
+      if (extensionBits > 0) {
+        br.skip_bits(extensionBits);
+      }
+    } else {
+      size_t trailingBits = remainingPayloadBits - 1;
+      if (trailingBits > 0 && !br.read_trailing_bits(trailingBits)) {
+        spdlog::warn("{}: invalid trailing bits ({} bits)", type_name(), trailingBits);
+        return false;
+      }
+    }
+  } else {
+    if (!br.read_trailing_bits(remainingPayloadBits)) {
+      spdlog::warn("{}: invalid trailing bits ({} bits)", type_name(), remainingPayloadBits);
+      return false;
+    }
+  }
+
+  return true;
 }
 
 }  // namespace av2_obu

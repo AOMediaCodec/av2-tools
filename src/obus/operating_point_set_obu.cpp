@@ -190,12 +190,10 @@ bool OperatingPointSetOBU::parse_payload(std::ifstream& ifs) {
     }
   }
 
-  // obu_extension_flag (extensible OBU, spec: open_bitstream_unit)
-  if (br.has_bits(1)) {
-    obu_extension_flag_ = br.read_bit();
-  }
+  // Parse obu_extension_flag + trailing_bits (extensible OBU)
+  if (!parse_obu_trailing_bits(br))
+    return false;
 
-  parsed_ = true;
   spdlog::debug("OPS: id={}, cnt={}, intent={}, reset={}", ops_id_, ops_cnt_, ops_intent_,
                 ops_reset_flag_);
   return true;
@@ -295,7 +293,6 @@ json OperatingPointSetOBU::to_json() const {
     j["operating_points"] = ops_json;
   }
 
-  j["obu_extension_flag"] = obu_extension_flag_;
   return j;
 }
 

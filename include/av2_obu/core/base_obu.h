@@ -19,6 +19,7 @@
 #include <vector>
 
 #include <av2_obu/core/av2_types.h>
+#include <av2_obu/core/bitstream_reader.h>
 
 using json = nlohmann::ordered_json;
 
@@ -100,6 +101,7 @@ public:
   const std::vector<uint8_t>& raw_payload() const { return raw_payload_; }
   ParseMode parse_mode() const { return parse_mode_; }
   void set_parse_mode(ParseMode mode) { parse_mode_ = mode; }
+  bool parsed() const { return parsed_; }
   const AV2SequenceHeader* active_sequence_header() const { return active_seq_header_; }
   void set_active_sequence_header(const AV2SequenceHeader* sh) { active_seq_header_ = sh; }
 
@@ -113,6 +115,10 @@ protected:
   // Parse payload - override in derived classes
   virtual bool parse_payload(std::ifstream& ifs) = 0;
 
+  // Parse trailing bits after OBU payload (also handles extensibility for now).
+  // Call from parse_payload() only when the payload has been fully parsed.
+  bool parse_obu_trailing_bits(BitstreamReader& br);
+
   // Helper: skip payload without parsing
   bool skip_payload(std::ifstream& ifs);
 
@@ -121,6 +127,8 @@ protected:
   ParseMode parse_mode_ = ParseMode::kDeep;
   const AV2SequenceHeader* active_seq_header_ = nullptr;
   std::vector<uint8_t> raw_payload_;  // Store raw bytes if needed
+  uint32_t obu_extension_flag_ = 0;   // For extensible OBUs
+  bool parsed_ = false;               // Set by parse() on successful parse_payload()
 };
 
 }  // namespace av2_obu

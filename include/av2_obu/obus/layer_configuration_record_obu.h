@@ -155,8 +155,6 @@ private:
   uint32_t lcr_local_atlas_id_ = 0;
   XLayerPTL local_ptl_;
   XLayerInfo local_xlayer_info_;
-
-  bool parsed_ = false;
 };
 
 }  // namespace av2_obu

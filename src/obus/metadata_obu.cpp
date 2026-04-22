@@ -44,7 +44,12 @@ bool MetadataOBU::parse_payload(std::ifstream& ifs) {
       }
     }
 
+    // Parse trailing_bits (non-extensible OBU)
+    if (!parse_obu_trailing_bits(br))
+      return false;
+
     return true;
+
   } catch (const std::exception& e) {
     spdlog::warn("Failed to parse metadata OBU ({}), continuing with next OBU", e.what());
     return true;

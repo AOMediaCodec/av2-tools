@@ -47,8 +47,6 @@ private:
   uint32_t mfh_apply_loop_filter_[4] = {};
 
   bool mfh_seg_info_present_flag_ = false;
-
-  bool parsed_ = false;
 };
 
 }  // namespace av2_obu

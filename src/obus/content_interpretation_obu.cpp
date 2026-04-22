@@ -119,6 +119,10 @@ bool ContentInterpretationOBU::parse_payload(std::ifstream& ifs) {
       }
     }
 
+    // Parse obu_extension_flag + trailing_bits (extensible OBU)
+    if (!parse_obu_trailing_bits(br))
+      return false;
+
     spdlog::debug("Successfully parsed CONTENT_INTERPRETATION OBU");
     return true;
 

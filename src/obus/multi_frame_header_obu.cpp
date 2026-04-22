@@ -58,7 +58,6 @@ bool MultiFrameHeaderOBU::parse_payload(std::ifstream& ifs) {
     spdlog::debug("MFH: seg_info present but not parsed (lightweight mode)");
   }
 
-  parsed_ = true;
   spdlog::debug("MFH: id={}, seq_header_id={}, frame_size={}",
                 mfh_id_, mfh_seq_header_id_,
                 mfh_frame_size_present_flag_ ? std::to_string(mfh_frame_width_) + "x" +

@@ -34,14 +34,9 @@ bool SequenceHeaderOBU::parse_payload(std::ifstream& ifs) {
       return false;
     }
 
-    // Check for trailing_bits()
-    size_t bits_remaining = br.bits_remaining();
-
-    if (bits_remaining > 0) {
-      if (!br.read_trailing_bits(bits_remaining)) {
-        spdlog::warn("Sequence header has invalid trailing bits ({} bits)", bits_remaining);
-      }
-    }
+    // Parse trailing bits (handles extensible OBU logic)
+    if (!parse_obu_trailing_bits(br))
+      return false;
 
     spdlog::debug("Successfully parsed AV2 sequence header");
     return true;

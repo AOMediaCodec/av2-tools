@@ -48,7 +48,10 @@ bool MSDOOBU::parse_payload(std::ifstream& ifs) {
 
   multistream_doh_constraint_flag_ = br.read_bit();
 
-  parsed_ = true;
+  // Parse trailing_bits (non-extensible OBU)
+  if (!parse_obu_trailing_bits(br))
+    return false;
+
   spdlog::debug("MSDO: {} streams", num_streams_);
   return true;
 }
