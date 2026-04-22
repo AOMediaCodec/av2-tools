@@ -17,6 +17,7 @@
 
 #include <av2_obu/core/obu_parser.h>
 #include <av2_obu/obus/sequence_header_obu.h>
+#include <av2_obu/version.h>
 
 namespace av2_obu {
 
@@ -140,7 +141,10 @@ bool OBUParser::scan_file(std::ifstream& ifs) {
 }
 
 json OBUParser::to_json() const {
-  json j = {{"file", current_file_}, {"obu_count", obus_.size()}, {"obus", json::array()}};
+  json j = {{"tool_version", av2_obu::build_version()},
+            {"file", current_file_},
+            {"obu_count", obus_.size()},
+            {"obus", json::array()}};
 
   for (const auto& obu : obus_) {
     j["obus"].push_back(obu->to_json());

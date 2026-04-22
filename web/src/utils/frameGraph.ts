@@ -15,6 +15,7 @@ export interface FrameNode {
   isTIP: boolean;
   refreshFlags: number;
   references: number[];   // decodeIndex of frames this depends on
+  sefTargetDisplayOrder: number;  // display order of referenced frame (-1 if not SEF)
   xlayerId: number;
   tlayerId: number;         // from OBU header (0-3)
   hierarchyLevel: number;   // derived from min reference distance
@@ -246,6 +247,10 @@ function computeSingleLayerGraph(
       if (!isFinite(minRefDist)) minRefDist = 1;
     }
 
+    // Resolve SEF target display order
+    const sefTargetDisplayOrder = (isSEF && sefShowIdx >= 0 && refSlots[sefShowIdx]?.valid)
+      ? refSlots[sefShowIdx].orderHint : -1;
+
     frames.push({
       decodeIndex,
       displayOrder,
@@ -257,6 +262,7 @@ function computeSingleLayerGraph(
       isTIP,
       refreshFlags,
       references,
+      sefTargetDisplayOrder,
       xlayerId,
       tlayerId: obu.header.tlayer_id ?? 0,
       hierarchyLevel: -1, // computed in second pass below

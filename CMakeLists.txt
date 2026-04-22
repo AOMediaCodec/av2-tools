@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.16)
-project(obu_tool VERSION 1.0.0 LANGUAGES CXX)
+project(av2_obu VERSION 0.1.0 LANGUAGES CXX)
+
+# ---- Versioning ----
+include(cmake/GitVersion.cmake)
+configure_file(cmake/version.h.in ${CMAKE_BINARY_DIR}/generated/av2_obu/version.h @ONLY)
+configure_file(cmake/web_version.ts.in ${CMAKE_SOURCE_DIR}/web/src/generated/version.ts @ONLY)
 
 # ---- Global settings ----
 set(CMAKE_CXX_STANDARD 17)
@@ -121,14 +126,19 @@ target_sources(av2_obu
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/av2_obu/obus/unknown_obu.h>
 )
 
-# Public headers are in include/, private headers (if any) in src/
+# Public headers are in include/, generated headers in build dir, private headers in src/
 target_include_directories(av2_obu
   PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/generated>
     $<INSTALL_INTERFACE:include>
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
+
+# Alias so FetchContent/add_subdirectory consumers can use av2_obu::av2_obu
+# (same target name as find_package consumers get via install NAMESPACE)
+add_library(av2_obu::av2_obu ALIAS av2_obu)
 
 target_link_libraries(av2_obu
   PUBLIC
@@ -179,15 +189,49 @@ endif()
 add_subdirectory(apps/av2_obu_channel_sim)
 add_subdirectory(apps/av1_obu_tool)
 
-# ---- Install rules ----
-include(GNUInstallDirs)
+# ---- Install rules (not for WASM/Emscripten builds) ----
+if(NOT EMSCRIPTEN)
+  include(GNUInstallDirs)
+  include(CMakePackageConfigHelpers)
 
-install(TARGETS av2_obu
-  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-)
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-        FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp")
+  install(TARGETS av2_obu spdlog nlohmann_json
+    EXPORT av2_obuTargets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+  )
+  install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
+          DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+          FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp")
+  install(FILES ${CMAKE_BINARY_DIR}/generated/av2_obu/version.h
+          DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/av2_obu)
+
+  # Export targets for find_package consumers
+  install(EXPORT av2_obuTargets
+    NAMESPACE av2_obu::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/av2_obu
+  )
+
+  # Package config file (relocatable)
+  configure_package_config_file(
+    cmake/av2_obuConfig.cmake.in
+    ${CMAKE_BINARY_DIR}/av2_obuConfig.cmake
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/av2_obu
+  )
+
+  # Package version file
+  write_basic_package_version_file(
+    ${CMAKE_BINARY_DIR}/av2_obuConfigVersion.cmake
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY ExactVersion
+  )
+
+  install(FILES
+    ${CMAKE_BINARY_DIR}/av2_obuConfig.cmake
+    ${CMAKE_BINARY_DIR}/av2_obuConfigVersion.cmake
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/av2_obu
+  )
+endif()
 
 # ---- Tests ----
 option(BUILD_TESTS "Build tests" ON)

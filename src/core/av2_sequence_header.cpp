@@ -567,7 +567,7 @@ json SequenceTransformQuantEntropyConfig::to_json() const {
 // ==================== SequenceFilterConfig ====================
 
 bool SequenceFilterConfig::parse(BitstreamReader& br, bool single_picture_header_flag,
-                                 bool Monochrome, BlockSize seq_sb_size) {
+                                 bool /* Monochrome */, BlockSize seq_sb_size) {
   spdlog::debug("Parsing sequence_filter_config");
 
   disable_loopfilters_across_tiles = br.read_bit();
@@ -723,7 +723,7 @@ static void parse_tile_params(BitstreamReader& br, uint32_t frameWidth, uint32_t
       startSb += sizeSb;
       tileCols++;
     }
-    uint32_t tileColsLog2 = tile_log2(1, tileCols);
+    (void)tile_log2(1, tileCols);  // tileColsLog2 used later in non-uniform row height calc
 
     uint32_t maxTileHeightSb;
     if (minLog2Tiles > 0) {

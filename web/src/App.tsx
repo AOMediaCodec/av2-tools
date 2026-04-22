@@ -3,6 +3,7 @@ import { FileUpload } from './components/FileUpload';
 import { OBUBrowser } from './components/OBUBrowser';
 import { BitstreamStats } from './components/BitstreamStats';
 import { initWasm, parseAV2Bitstream, isWasmSupported } from './wasm/av2-parser';
+import { BUILD_VERSION } from './generated/version';
 import './App.css';
 
 type AppState =
@@ -64,7 +65,7 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>AV2 OBU Analyzer</h1>
+        <h1>AV2 OBU Analyzer <span className="app-version">v{BUILD_VERSION}</span></h1>
         <p className="app-subtitle">Browser-based AV2 bitstream analysis tool</p>
       </header>
 

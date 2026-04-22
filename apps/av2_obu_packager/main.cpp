@@ -15,6 +15,7 @@
 
 #include "packaging_strategy.h"
 #include <av2_obu/av2_obu.h>
+#include <av2_obu/version.h>
 
 // libisomedia headers
 #include <fstream>
@@ -35,6 +36,7 @@ void setup_logging(bool verbose) {
 
 int main(int argc, char** argv) {
   CLI::App app{"AV2 OBU Packager - Package AV2 bitstreams into MP4 containers"};
+  app.set_version_flag("--version", av2_obu::build_version());
 
   // Global options
   bool verbose = false;

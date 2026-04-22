@@ -20,7 +20,7 @@ namespace av2_obu {
 bool FrameHeaderInfo::parse_lightweight(BitstreamReader& br, OBUType obu_type,
                                         const AV2SequenceHeader& sh) {
   // Derive frame classification from OBU type (spec helper functions)
-  bool keyFrame = is_key_frame_obu(obu_type);
+  (void)is_key_frame_obu(obu_type);  // TODO: use keyFrame when deep parsing is complete
   bool IsBridge = (obu_type == OBUType::BRIDGE_FRAME);
 
   // --- cur_mfh_id ---

@@ -65,6 +65,7 @@ web/node_modules/
 web/dist/
 web/.vite/
 web/.eslintcache
+web/src/generated/
 
 # WASM artifacts (generated during build)
 *.wasm

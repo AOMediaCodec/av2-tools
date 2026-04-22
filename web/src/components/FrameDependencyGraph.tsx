@@ -31,12 +31,9 @@ function getFrameColor(node: FrameNode) {
 }
 
 function getFrameLabel(node: FrameNode): string {
-  if (node.isSEF) return 'SEF';
-  if (node.isTIP) return 'TIP';
-  if (node.obuType === 'CLK') return 'CLK';
-  if (node.obuType === 'OLK') return 'OLK';
-  if (node.obuType === 'RAS_FRAME') return 'RAS';
-  if (node.obuType === 'SWITCH') return 'SW';
+  if (node.isSEF) {
+    return node.sefTargetDisplayOrder >= 0 ? `S${node.sefTargetDisplayOrder}` : String(node.displayOrder);
+  }
   return String(node.displayOrder);
 }
 
@@ -78,7 +75,7 @@ export function FrameDependencyGraph({ obus }: Props) {
         {[
           { label: 'CLK', color: FRAME_COLORS.CLK },
           { label: 'Inter (output)', color: FRAME_COLORS.INTER_OUT },
-          { label: 'Inter (hidden)', color: FRAME_COLORS.INTER_HID },
+          { label: 'Hidden', color: FRAME_COLORS.INTER_HID },
           { label: 'TIP', color: FRAME_COLORS.TIP_OUT },
           { label: 'SEF', color: FRAME_COLORS.SEF },
         ].map(({ label, color }) => (
@@ -250,7 +247,7 @@ function XlayerGraph({ frames, xlayerId, showXlayerLabel }: {
       const idx = node.decodeIndex;
       const isDimmed = highlightedSet && !highlightedSet.has(idx);
       const isHl = highlightedSet?.has(idx);
-      const label = showLabel ? getFrameLabel(node) : String(idx);
+      const label = getFrameLabel(node);
 
       return (
         <g key={`c-${idx}-${baseY}`}

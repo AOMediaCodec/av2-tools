@@ -17,6 +17,7 @@
 #include <iostream>
 
 #include <av2_obu/core/obu_parser.h>
+#include <av2_obu/version.h>
 
 using namespace av2_obu;
 
@@ -33,6 +34,7 @@ void setup_logging(bool verbose) {
 
 int main(int argc, char** argv) {
   CLI::App app{"AV2 OBU Tool - AV2 bitstream analyzer and manipulator"};
+  app.set_version_flag("--version", av2_obu::build_version());
 
   // Global options
   bool verbose = false;

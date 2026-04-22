@@ -17,6 +17,7 @@
 
 #include "bit_corruptor.h"
 #include "packet_loss_simulator.h"
+#include <av2_obu/version.h>
 
 using namespace av2_obu;
 
@@ -36,6 +37,7 @@ void print_report_header() {
 
 int main(int argc, char** argv) {
   CLI::App app{"AV2 OBU Channel Simulator - Simulate bit errors and packet loss"};
+  app.set_version_flag("--version", av2_obu::build_version());
   app.require_subcommand(1);  // Require exactly one subcommand
 
   // Global options
