@@ -222,6 +222,22 @@ body {
   color: #666;
 }
 
+.source-url {
+  margin: 4px 0;
+  font-size: 13px;
+  color: #666;
+  word-break: break-all;
+}
+
+.source-url a {
+  color: #1976d2;
+  text-decoration: none;
+}
+
+.source-url a:hover {
+  text-decoration: underline;
+}
+
 .btn-primary {
   padding: 10px 20px;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);

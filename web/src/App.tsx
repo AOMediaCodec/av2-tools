@@ -6,17 +6,82 @@ import { initWasm, parseAV2Bitstream, isWasmSupported } from './wasm/av2-parser'
 import { BUILD_VERSION } from './generated/version';
 import './App.css';
 
+const ALLOWED_FETCH_ORIGINS = [
+  // Production buckets (AOM) -- add once Andrey creates them
+  'https://aom-av2-interop-public.s3.amazonaws.com',
+  'https://aom-av2-interop-public.s3.us-west-1.amazonaws.com',
+  // Personal test bucket
+  'https://podborski-av2-interop-public.s3.amazonaws.com',
+  'https://podborski-av2-interop-public.s3.us-west-1.amazonaws.com',
+  // Path-style S3 URLs (both regions)
+  'https://s3.amazonaws.com',
+  'https://s3.us-west-1.amazonaws.com',
+];
+
 type AppState =
   | { status: 'init' }
   | { status: 'loading' }
   | { status: 'ready' }
+  | { status: 'fetching'; url: string }
   | { status: 'parsing'; filename: string }
-  | { status: 'parsed'; result: any }
+  | { status: 'parsed'; result: any; sourceUrl?: string }
   | { status: 'error'; message: string };
 
 function App() {
   const [state, setState] = useState<AppState>({ status: 'init' });
   const [activeTab, setActiveTab] = useState<'browser' | 'statistics'>('browser');
+
+  const handleFileLoaded = useCallback(async (data: Uint8Array, filename: string, sourceUrl?: string) => {
+    setState({ status: 'parsing', filename });
+
+    try {
+      const result = await parseAV2Bitstream(data);
+      // Replace the temp filename with the actual filename
+      result.file = filename;
+      setState({ status: 'parsed', result, sourceUrl });
+    } catch (error) {
+      setState({
+        status: 'error',
+        message: error instanceof Error ? error.message : 'Unknown parsing error',
+      });
+    }
+  }, []);
+
+  const fetchAndParse = useCallback(async (url: string) => {
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      setState({ status: 'error', message: `Invalid URL: ${url}` });
+      return;
+    }
+    if (!ALLOWED_FETCH_ORIGINS.includes(parsed.origin)) {
+      setState({
+        status: 'error',
+        message: `Refusing to fetch from disallowed origin: ${parsed.origin}. Only AV2 interop S3 buckets are permitted.`,
+      });
+      return;
+    }
+
+    setState({ status: 'fetching', url });
+
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status} ${response.statusText}`);
+      }
+      const buffer = await response.arrayBuffer();
+      const data = new Uint8Array(buffer);
+      const segments = parsed.pathname.split('/').filter(Boolean);
+      const filename = segments.length > 0 ? segments[segments.length - 1] : url;
+      await handleFileLoaded(data, filename, url);
+    } catch (error) {
+      setState({
+        status: 'error',
+        message: `Failed to fetch ${url}: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
+  }, [handleFileLoaded]);
 
   useEffect(() => {
     // Check WASM support
@@ -32,7 +97,13 @@ function App() {
     setState({ status: 'loading' });
     initWasm()
       .then(() => {
-        setState({ status: 'ready' });
+        const params = new URLSearchParams(window.location.search);
+        const url = params.get('url');
+        if (url) {
+          fetchAndParse(url);
+        } else {
+          setState({ status: 'ready' });
+        }
       })
       .catch((error) => {
         setState({
@@ -40,22 +111,7 @@ function App() {
           message: `Failed to load WASM module: ${error.message}`,
         });
       });
-  }, []);
-
-  const handleFileLoaded = useCallback(async (data: Uint8Array, filename: string) => {
-    setState({ status: 'parsing', filename });
-
-    try {
-      const result = await parseAV2Bitstream(data);
-      // Replace the temp filename with the actual filename
-      result.file = filename;
-      setState({ status: 'parsed', result });
-    } catch (error) {
-      setState({
-        status: 'error',
-        message: error instanceof Error ? error.message : 'Unknown parsing error',
-      });
-    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleReset = useCallback(() => {
@@ -109,6 +165,13 @@ function App() {
           </div>
         )}
 
+        {state.status === 'fetching' && (
+          <div className="status-message">
+            <div className="spinner" />
+            <p>Fetching {state.url}...</p>
+          </div>
+        )}
+
         {state.status === 'parsing' && (
           <div className="status-message">
             <div className="spinner" />
@@ -120,6 +183,14 @@ function App() {
           <div className="results-container">
             <div className="results-header">
               <h3>{state.result.file}</h3>
+              {state.sourceUrl && (
+                <p className="source-url">
+                  Source:{' '}
+                  <a href={state.sourceUrl} target="_blank" rel="noopener noreferrer">
+                    {state.sourceUrl}
+                  </a>
+                </p>
+              )}
               <p className="file-info">
                 {(() => {
                   const obus = state.result.obus;

@@ -55,3 +55,20 @@ web/
 - `SpotlightSearch.tsx` - Keyboard-driven search (press `/`)
 - `JsonHybridViewer.tsx` - Expandable syntax tree with tables
 - `av2-parser.ts` - WASM loader wrapper
+
+## Loading bitstreams via URL
+
+The analyzer can auto-load a remote `.obu` file via a `?url=` query
+parameter:
+
+```
+https://aomediacodec.github.io/av2-tools/?url=https://podborski-av2-interop-public.s3.us-west-1.amazonaws.com/streams/av2_interop_01_lowdelay.obu
+```
+
+For security, only origins listed in `ALLOWED_FETCH_ORIGINS` (in
+`web/src/App.tsx`) are accepted -- the app will not act as a generic
+proxy. Add new buckets there as needed.
+
+The remote bucket must serve the `.obu` with a CORS policy that allows
+`GET` from the analyzer's origin (e.g. `https://aomediacodec.github.io`
+and `http://localhost:3000` for development).
