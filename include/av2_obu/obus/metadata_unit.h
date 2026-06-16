@@ -120,8 +120,8 @@ private:
   // BANDING_HINTS
   struct BandingComponentInfo {
     uint8_t banding_in_component_present_flag = 0;
-    uint8_t max_band_width_minus4 = 0;
-    uint8_t max_band_step_minus1 = 0;
+    uint8_t max_band_width_minus_4 = 0;
+    uint8_t max_band_step_minus_1 = 0;
   };
 
   uint8_t coding_banding_present_flag_ = 0;
@@ -134,8 +134,8 @@ private:
   uint8_t num_band_units_cols_minus_1_ = 0;
   uint8_t varying_size_band_units_flag_ = 0;
   uint8_t band_block_in_luma_samples_ = 0;
-  std::vector<uint8_t> vert_size_in_band_blocks_minus1_;
-  std::vector<uint8_t> horz_size_in_band_blocks_minus1_;
+  std::vector<uint8_t> vert_size_in_band_blocks_minus_1_;
+  std::vector<uint8_t> horz_size_in_band_blocks_minus_1_;
   std::vector<std::vector<uint8_t>> banding_in_band_unit_present_flags_;  // 2D array [rows][cols]
 };
 

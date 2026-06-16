@@ -32,24 +32,24 @@ static const char* mode_name(AtlasSegmentOBU::ModeIdc m) {
 // ats_region_info() — returns NumRegionsInAtlas
 static uint32_t parse_region_info(BitstreamReader& br,
                                   AtlasSegmentOBU::EnhancedAtlasInfo& info) {
-  info.num_region_columns_minus1 = br.read_uvlc();
-  info.num_region_rows_minus1    = br.read_uvlc();
+  info.num_region_columns_minus_1 = br.read_uvlc();
+  info.num_region_rows_minus_1    = br.read_uvlc();
   info.uniform_spacing_flag      = br.read_bit();
 
   if (!info.uniform_spacing_flag) {
-    uint32_t num_cols = info.num_region_columns_minus1 + 1;
-    uint32_t num_rows = info.num_region_rows_minus1 + 1;
-    info.column_width_minus1.resize(num_cols);
-    info.row_height_minus1.resize(num_rows);
+    uint32_t num_cols = info.num_region_columns_minus_1 + 1;
+    uint32_t num_rows = info.num_region_rows_minus_1 + 1;
+    info.column_width_minus_1.resize(num_cols);
+    info.row_height_minus_1.resize(num_rows);
     for (uint32_t i = 0; i < num_cols; i++)
-      info.column_width_minus1[i] = br.read_uvlc();
+      info.column_width_minus_1[i] = br.read_uvlc();
     for (uint32_t i = 0; i < num_rows; i++)
-      info.row_height_minus1[i] = br.read_uvlc();
+      info.row_height_minus_1[i] = br.read_uvlc();
   } else {
-    info.region_width_minus1  = br.read_uvlc();
-    info.region_height_minus1 = br.read_uvlc();
+    info.region_width_minus_1  = br.read_uvlc();
+    info.region_height_minus_1 = br.read_uvlc();
   }
-  return (info.num_region_columns_minus1 + 1) * (info.num_region_rows_minus1 + 1);
+  return (info.num_region_columns_minus_1 + 1) * (info.num_region_rows_minus_1 + 1);
 }
 
 // ats_region_to_segment_mapping() — returns numSegments
@@ -58,8 +58,8 @@ static uint32_t parse_region_to_segment_mapping(BitstreamReader& br,
                                                   uint32_t num_regions) {
   info.single_region_per_segment_flag = br.read_bit();
   if (!info.single_region_per_segment_flag) {
-    info.num_atlas_segments_minus1 = br.read_uvlc();
-    uint32_t n = info.num_atlas_segments_minus1 + 1;
+    info.num_atlas_segments_minus_1 = br.read_uvlc();
+    uint32_t n = info.num_atlas_segments_minus_1 + 1;
     info.segment_regions.resize(n);
     for (uint32_t i = 0; i < n; i++) {
       info.segment_regions[i].top_left_col         = br.read_uvlc();
@@ -69,7 +69,7 @@ static uint32_t parse_region_to_segment_mapping(BitstreamReader& br,
     }
     return n;
   } else {
-    info.num_atlas_segments_minus1 = num_regions - 1;
+    info.num_atlas_segments_minus_1 = num_regions - 1;
     return num_regions;
   }
 }
@@ -114,7 +114,7 @@ bool AtlasSegmentOBU::parse_payload(std::ifstream& ifs) {
         basic_stream_id_present_ = br.read_bit();
         basic_width_             = br.read_uvlc();
         basic_height_            = br.read_uvlc();
-        uint32_t n = br.read_uvlc() + 1;  // ats_num_atlas_segments_minus1 + 1
+        uint32_t n = br.read_uvlc() + 1;  // ats_num_atlas_segments_minus_1 + 1
         num_segments = n;
         segments_.resize(n);
         for (uint32_t i = 0; i < n; i++) {
@@ -128,8 +128,8 @@ bool AtlasSegmentOBU::parse_payload(std::ifstream& ifs) {
         break;
       }
       case ModeIdc::SINGLE_ATLAS: {
-        nominal_width_minus1_  = br.read_uvlc();
-        nominal_height_minus1_ = br.read_uvlc();
+        nominal_width_minus_1_  = br.read_uvlc();
+        nominal_height_minus_1_ = br.read_uvlc();
         num_segments = 1;
         break;
       }
@@ -138,7 +138,7 @@ bool AtlasSegmentOBU::parse_payload(std::ifstream& ifs) {
         bool with_alpha = (mode_idc_ == ModeIdc::MULTISTREAM_ALPHA_ATLAS);
         msi_width_  = br.read_uvlc();
         msi_height_ = br.read_uvlc();
-        uint32_t n  = br.read_uvlc() + 1;  // ats_msi_num_atlas_segments_minus1 + 1
+        uint32_t n  = br.read_uvlc() + 1;  // ats_msi_num_atlas_segments_minus_1 + 1
         num_segments = n;
         if (with_alpha)
           msi_alpha_segments_present_ = br.read_bit();
@@ -192,18 +192,18 @@ json AtlasSegmentOBU::to_json() const {
   switch (mode_idc_) {
     case ModeIdc::ENHANCED_ATLAS: {
       json e;
-      e["ats_num_region_columns_minus_1"] = enhanced_.num_region_columns_minus1;
-      e["ats_num_region_rows_minus_1"]    = enhanced_.num_region_rows_minus1;
+      e["ats_num_region_columns_minus_1"] = enhanced_.num_region_columns_minus_1;
+      e["ats_num_region_rows_minus_1"]    = enhanced_.num_region_rows_minus_1;
       e["ats_uniform_spacing_flag"]      = enhanced_.uniform_spacing_flag;
       if (!enhanced_.uniform_spacing_flag) {
-        e["ats_column_width_minus_1"] = enhanced_.column_width_minus1;
-        e["ats_row_height_minus_1"]   = enhanced_.row_height_minus1;
+        e["ats_column_width_minus_1"] = enhanced_.column_width_minus_1;
+        e["ats_row_height_minus_1"]   = enhanced_.row_height_minus_1;
       } else {
-        e["ats_region_width_minus_1"]  = enhanced_.region_width_minus1;
-        e["ats_region_height_minus_1"] = enhanced_.region_height_minus1;
+        e["ats_region_width_minus_1"]  = enhanced_.region_width_minus_1;
+        e["ats_region_height_minus_1"] = enhanced_.region_height_minus_1;
       }
       e["ats_single_region_per_atlas_segment_flag"] = enhanced_.single_region_per_segment_flag;
-      e["ats_num_atlas_segments_minus_1"]            = enhanced_.num_atlas_segments_minus1;
+      e["ats_num_atlas_segments_minus_1"]            = enhanced_.num_atlas_segments_minus_1;
       if (!enhanced_.single_region_per_segment_flag) {
         json regions = json::array();
         for (const auto& r : enhanced_.segment_regions) {
@@ -237,8 +237,8 @@ json AtlasSegmentOBU::to_json() const {
       break;
     }
     case ModeIdc::SINGLE_ATLAS:
-      j["ats_nominal_width_minus_1"]  = nominal_width_minus1_;
-      j["ats_nominal_height_minus_1"] = nominal_height_minus1_;
+      j["ats_nominal_width_minus_1"]  = nominal_width_minus_1_;
+      j["ats_nominal_height_minus_1"] = nominal_height_minus_1_;
       break;
     case ModeIdc::MULTISTREAM_ATLAS:
     case ModeIdc::MULTISTREAM_ALPHA_ATLAS: {

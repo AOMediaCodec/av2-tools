@@ -42,15 +42,15 @@ public:
   };
 
   struct EnhancedAtlasInfo {
-    uint32_t num_region_columns_minus1 = 0;
-    uint32_t num_region_rows_minus1 = 0;
+    uint32_t num_region_columns_minus_1 = 0;
+    uint32_t num_region_rows_minus_1 = 0;
     uint32_t uniform_spacing_flag = 0;
-    std::vector<uint32_t> column_width_minus1;
-    std::vector<uint32_t> row_height_minus1;
-    uint32_t region_width_minus1 = 0;
-    uint32_t region_height_minus1 = 0;
+    std::vector<uint32_t> column_width_minus_1;
+    std::vector<uint32_t> row_height_minus_1;
+    uint32_t region_width_minus_1 = 0;
+    uint32_t region_height_minus_1 = 0;
     uint32_t single_region_per_segment_flag = 0;
-    uint32_t num_atlas_segments_minus1 = 0;
+    uint32_t num_atlas_segments_minus_1 = 0;
     struct SegmentRegion {
       uint32_t top_left_col = 0;
       uint32_t top_left_row = 0;
@@ -81,8 +81,8 @@ private:
   uint32_t basic_height_ = 0;
 
   // Mode 2 — SINGLE_ATLAS
-  uint32_t nominal_width_minus1_ = 0;
-  uint32_t nominal_height_minus1_ = 0;
+  uint32_t nominal_width_minus_1_ = 0;
+  uint32_t nominal_height_minus_1_ = 0;
 
   // Modes 3 & 4 — MULTISTREAM_ATLAS / MULTISTREAM_ALPHA_ATLAS
   uint32_t msi_width_ = 0;
