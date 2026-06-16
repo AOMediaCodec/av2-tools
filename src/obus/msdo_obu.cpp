@@ -28,8 +28,8 @@ bool MSDOOBU::parse_payload(std::ifstream& ifs) {
   BitstreamReader br(raw_payload_);
 
   // multistream_decoder_operation_obu()
-  uint32_t num_streams_minus2 = br.read_bits(3);
-  num_streams_ = num_streams_minus2 + 2;
+  uint32_t num_streams_minus_2 = br.read_bits(3);
+  num_streams_ = num_streams_minus_2 + 2;
   multistream_profile_idc_ = br.read_bits(5);
   multistream_level_idx_ = br.read_bits(5);
   multistream_tier_ = br.read_bit();

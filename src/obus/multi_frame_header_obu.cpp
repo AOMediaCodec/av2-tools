@@ -29,8 +29,8 @@ bool MultiFrameHeaderOBU::parse_payload(std::ifstream& ifs) {
 
   // multi_frame_header_obu() syntax
   mfh_seq_header_id_ = br.read_uvlc();
-  uint32_t mfh_id_minus1 = br.read_uvlc();
-  mfh_id_ = mfh_id_minus1 + 1;
+  uint32_t mfh_id_minus_1 = br.read_uvlc();
+  mfh_id_ = mfh_id_minus_1 + 1;
 
   // Optional frame size override
   mfh_frame_size_present_flag_ = br.read_bit();

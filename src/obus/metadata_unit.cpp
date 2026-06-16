@@ -287,10 +287,10 @@ bool MetadataUnit::parse_payload(BitstreamReader& br) {
               comp.banding_in_component_present_flag = static_cast<uint8_t>(br.read_bits(1));
 
               if (comp.banding_in_component_present_flag) {
-                comp.max_band_width_minus4 = static_cast<uint8_t>(br.read_bits(6));
-                comp.max_band_step_minus1 = static_cast<uint8_t>(br.read_bits(4));
+                comp.max_band_width_minus_4 = static_cast<uint8_t>(br.read_bits(6));
+                comp.max_band_step_minus_1 = static_cast<uint8_t>(br.read_bits(4));
                 spdlog::debug("      component[{}]: present, width={}, step={}", plane,
-                              comp.max_band_width_minus4, comp.max_band_step_minus1);
+                              comp.max_band_width_minus_4, comp.max_band_step_minus_1);
               } else {
                 spdlog::debug("      component[{}]: not present", plane);
               }
@@ -320,22 +320,22 @@ bool MetadataUnit::parse_payload(BitstreamReader& br) {
                               int(band_block_in_luma_samples_));
 
                 // Read vertical sizes
-                vert_size_in_band_blocks_minus1_.clear();
+                vert_size_in_band_blocks_minus_1_.clear();
                 for (uint32_t r = 0; r <= num_band_units_rows_minus_1_; r++) {
                   uint8_t vert_size = static_cast<uint8_t>(br.read_bits(5));
-                  vert_size_in_band_blocks_minus1_.push_back(vert_size);
+                  vert_size_in_band_blocks_minus_1_.push_back(vert_size);
                 }
 
                 // Read horizontal sizes
-                horz_size_in_band_blocks_minus1_.clear();
+                horz_size_in_band_blocks_minus_1_.clear();
                 for (uint32_t c = 0; c <= num_band_units_cols_minus_1_; c++) {
                   uint8_t horz_size = static_cast<uint8_t>(br.read_bits(5));
-                  horz_size_in_band_blocks_minus1_.push_back(horz_size);
+                  horz_size_in_band_blocks_minus_1_.push_back(horz_size);
                 }
 
                 spdlog::debug("      Read {} vertical and {} horizontal band block sizes",
-                              vert_size_in_band_blocks_minus1_.size(),
-                              horz_size_in_band_blocks_minus1_.size());
+                              vert_size_in_band_blocks_minus_1_.size(),
+                              horz_size_in_band_blocks_minus_1_.size());
               }
 
               // Read banding flags for each band unit
@@ -593,8 +593,8 @@ void MetadataUnit::dump() const {
           for (size_t i = 0; i < banding_components_.size(); i++) {
             const auto& comp = banding_components_[i];
             if (comp.banding_in_component_present_flag) {
-              spdlog::debug("      component[{}]: width={}, step={}", i, comp.max_band_width_minus4,
-                            comp.max_band_step_minus1);
+              spdlog::debug("      component[{}]: width={}, step={}", i, comp.max_band_width_minus_4,
+                            comp.max_band_step_minus_1);
             }
           }
           if (band_units_information_present_flag_) {
@@ -602,8 +602,8 @@ void MetadataUnit::dump() const {
                           num_band_units_cols_minus_1_ + 1);
             if (varying_size_band_units_flag_) {
               spdlog::debug("      varying_size with {} vertical and {} horizontal sizes",
-                            vert_size_in_band_blocks_minus1_.size(),
-                            horz_size_in_band_blocks_minus1_.size());
+                            vert_size_in_band_blocks_minus_1_.size(),
+                            horz_size_in_band_blocks_minus_1_.size());
             }
           }
         }
@@ -785,8 +785,8 @@ nlohmann::ordered_json MetadataUnit::to_json() const {
               comp_json["banding_in_component_present_flag"] =
                 comp.banding_in_component_present_flag;
               if (comp.banding_in_component_present_flag) {
-                comp_json["max_band_width_minus4"] = comp.max_band_width_minus4;
-                comp_json["max_band_step_minus1"] = comp.max_band_step_minus1;
+                comp_json["max_band_width_minus_4"] = comp.max_band_width_minus_4;
+                comp_json["max_band_step_minus_1"] = comp.max_band_step_minus_1;
               }
               components.push_back(comp_json);
             }
@@ -801,8 +801,8 @@ nlohmann::ordered_json MetadataUnit::to_json() const {
 
             if (varying_size_band_units_flag_) {
               j["band_block_in_luma_samples"] = band_block_in_luma_samples_;
-              j["vert_size_in_band_blocks_minus1"] = vert_size_in_band_blocks_minus1_;
-              j["horz_size_in_band_blocks_minus1"] = horz_size_in_band_blocks_minus1_;
+              j["vert_size_in_band_blocks_minus_1"] = vert_size_in_band_blocks_minus_1_;
+              j["horz_size_in_band_blocks_minus_1"] = horz_size_in_band_blocks_minus_1_;
             }
 
             // Serialize 2D banding flags array

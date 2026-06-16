@@ -53,7 +53,7 @@ struct SequencePartitionConfig {
   uint32_t enable_ext_partitions = 0;
   uint32_t enable_uneven_4way_partitions = 0;
   uint32_t reduce_pb_aspect_ratio = 0;
-  uint32_t max_pb_aspect_ratio_log2_minus1 = 0;
+  uint32_t max_pb_aspect_ratio_log2_minus_1 = 0;
 
   // Computed values
   uint32_t MaxPbAspectRatio = 8;
@@ -104,9 +104,9 @@ struct SequenceInterConfig {
   uint32_t explicit_ref_frame_map = 0;
   uint32_t explicit_num_ref_frames = 0;
   uint32_t num_ref_frames_minus_1 = 0;
-  uint32_t seq_max_drl_bits_minus1 = 0;
+  uint32_t seq_max_drl_bits_minus_1 = 0;
   uint32_t allow_frame_max_drl_bits = 0;
-  uint32_t seq_max_bvp_drl_bits_minus1 = 0;
+  uint32_t seq_max_bvp_drl_bits_minus_1 = 0;
   uint32_t allow_frame_max_bvp_drl_bits = 0;
   uint32_t num_same_ref_compound = 0;
   uint32_t enable_tip = 0;
@@ -197,7 +197,7 @@ struct SequenceFilterConfig {
   uint32_t ccso_unit_matches_sb_size = 0;
   uint32_t cdef_on_skip_txfm_always_on = 0;
   uint32_t cdef_on_skip_txfm_disabled = 0;
-  uint32_t df_par_bits_minus2 = 0;
+  uint32_t df_par_bits_minus_2 = 0;
 
   // Computed values
   uint32_t CdefOnSkipTxfm = CDEF_ON_SKIP_TXFM_ADAPTIVE;

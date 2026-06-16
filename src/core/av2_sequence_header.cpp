@@ -103,8 +103,8 @@ bool SequencePartitionConfig::parse(BitstreamReader& br, bool single_picture_hea
 
   reduce_pb_aspect_ratio = br.read_bit();
   if (reduce_pb_aspect_ratio) {
-    max_pb_aspect_ratio_log2_minus1 = br.read_bit();
-    MaxPbAspectRatio = 1 << (max_pb_aspect_ratio_log2_minus1 + 1);
+    max_pb_aspect_ratio_log2_minus_1 = br.read_bit();
+    MaxPbAspectRatio = 1 << (max_pb_aspect_ratio_log2_minus_1 + 1);
   } else {
     MaxPbAspectRatio = 8;
   }
@@ -239,7 +239,7 @@ bool SequenceInterConfig::parse(BitstreamReader& br, bool single_picture_header_
       DrlReorder = constrain_drl_reorder ? DRL_REORDER_CONSTRAINT : DRL_REORDER_ALWAYS;
     }
 
-    seq_max_bvp_drl_bits_minus1 = br.read_ns(MAX_REF_BV_STACK_SIZE - 1);
+    seq_max_bvp_drl_bits_minus_1 = br.read_ns(MAX_REF_BV_STACK_SIZE - 1);
     allow_frame_max_bvp_drl_bits = br.read_bit();
 
     enable_bawp = br.read_bit();
@@ -303,10 +303,10 @@ bool SequenceInterConfig::parse(BitstreamReader& br, bool single_picture_header_
 
     long_term_frame_id_bits = br.read_bits(3);
 
-    seq_max_drl_bits_minus1 = br.read_ns(MAX_REF_MV_STACK_SIZE - 1);
+    seq_max_drl_bits_minus_1 = br.read_ns(MAX_REF_MV_STACK_SIZE - 1);
     allow_frame_max_drl_bits = br.read_bit();
 
-    seq_max_bvp_drl_bits_minus1 = br.read_ns(MAX_REF_BV_STACK_SIZE - 1);
+    seq_max_bvp_drl_bits_minus_1 = br.read_ns(MAX_REF_BV_STACK_SIZE - 1);
     allow_frame_max_bvp_drl_bits = br.read_bit();
 
     num_same_ref_compound = br.read_bits(2);
@@ -373,9 +373,9 @@ json SequenceInterConfig::to_json() const {
             {"NumRefFrames", NumRefFrames},
             {"ActiveNumRefFrames", ActiveNumRefFrames},
             {"long_term_frame_id_bits", long_term_frame_id_bits},
-            {"seq_max_drl_bits_minus1", seq_max_drl_bits_minus1},
+            {"seq_max_drl_bits_minus_1", seq_max_drl_bits_minus_1},
             {"allow_frame_max_drl_bits", allow_frame_max_drl_bits},
-            {"seq_max_bvp_drl_bits_minus1", seq_max_bvp_drl_bits_minus1},
+            {"seq_max_bvp_drl_bits_minus_1", seq_max_bvp_drl_bits_minus_1},
             {"allow_frame_max_bvp_drl_bits", allow_frame_max_bvp_drl_bits},
             {"num_same_ref_compound", num_same_ref_compound},
             {"enable_tip", enable_tip},
@@ -617,7 +617,7 @@ bool SequenceFilterConfig::parse(BitstreamReader& br, bool single_picture_header
     }
   }
 
-  df_par_bits_minus2 = br.read_bits(2);
+  df_par_bits_minus_2 = br.read_bits(2);
 
   return true;
 }
@@ -631,7 +631,7 @@ json SequenceFilterConfig::to_json() const {
               {"enable_ccso", enable_ccso},
               {"ccso_unit_matches_sb_size", ccso_unit_matches_sb_size},
               {"CdefOnSkipTxfm", CdefOnSkipTxfm},
-              {"df_par_bits_minus2", df_par_bits_minus2}};
+              {"df_par_bits_minus_2", df_par_bits_minus_2}};
 }
 
 // ==================== SequenceTileConfig ====================
