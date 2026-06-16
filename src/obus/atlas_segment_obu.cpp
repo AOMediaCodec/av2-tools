@@ -162,7 +162,7 @@ bool AtlasSegmentOBU::parse_payload(std::ifstream& ifs) {
       }
       default:
         spdlog::warn("ATLAS_SEGMENT: unknown mode_idc={}", static_cast<uint32_t>(mode_idc_));
-        return true;
+        return false;
     }
 
     parse_label_segment_info(br, label_, num_segments);
@@ -192,18 +192,18 @@ json AtlasSegmentOBU::to_json() const {
   switch (mode_idc_) {
     case ModeIdc::ENHANCED_ATLAS: {
       json e;
-      e["ats_num_region_columns_minus1"] = enhanced_.num_region_columns_minus1;
-      e["ats_num_region_rows_minus1"]    = enhanced_.num_region_rows_minus1;
+      e["ats_num_region_columns_minus_1"] = enhanced_.num_region_columns_minus1;
+      e["ats_num_region_rows_minus_1"]    = enhanced_.num_region_rows_minus1;
       e["ats_uniform_spacing_flag"]      = enhanced_.uniform_spacing_flag;
       if (!enhanced_.uniform_spacing_flag) {
-        e["ats_column_width_minus1"] = enhanced_.column_width_minus1;
-        e["ats_row_height_minus1"]   = enhanced_.row_height_minus1;
+        e["ats_column_width_minus_1"] = enhanced_.column_width_minus1;
+        e["ats_row_height_minus_1"]   = enhanced_.row_height_minus1;
       } else {
-        e["ats_region_width_minus1"]  = enhanced_.region_width_minus1;
-        e["ats_region_height_minus1"] = enhanced_.region_height_minus1;
+        e["ats_region_width_minus_1"]  = enhanced_.region_width_minus1;
+        e["ats_region_height_minus_1"] = enhanced_.region_height_minus1;
       }
       e["ats_single_region_per_atlas_segment_flag"] = enhanced_.single_region_per_segment_flag;
-      e["ats_num_atlas_segments_minus1"]            = enhanced_.num_atlas_segments_minus1;
+      e["ats_num_atlas_segments_minus_1"]            = enhanced_.num_atlas_segments_minus1;
       if (!enhanced_.single_region_per_segment_flag) {
         json regions = json::array();
         for (const auto& r : enhanced_.segment_regions) {
@@ -221,7 +221,7 @@ json AtlasSegmentOBU::to_json() const {
       j["ats_stream_id_present"]          = basic_stream_id_present_;
       j["ats_width"]                      = basic_width_;
       j["ats_height"]                     = basic_height_;
-      j["ats_num_atlas_segments_minus1"]  = segments_.empty() ? 0 : (uint32_t)segments_.size() - 1;
+      j["ats_num_atlas_segments_minus_1"]  = segments_.empty() ? 0 : (uint32_t)segments_.size() - 1;
       json segs = json::array();
       for (const auto& s : segments_) {
         json seg;
@@ -237,14 +237,14 @@ json AtlasSegmentOBU::to_json() const {
       break;
     }
     case ModeIdc::SINGLE_ATLAS:
-      j["ats_nominal_width_minus1"]  = nominal_width_minus1_;
-      j["ats_nominal_height_minus1"] = nominal_height_minus1_;
+      j["ats_nominal_width_minus_1"]  = nominal_width_minus1_;
+      j["ats_nominal_height_minus_1"] = nominal_height_minus1_;
       break;
     case ModeIdc::MULTISTREAM_ATLAS:
     case ModeIdc::MULTISTREAM_ALPHA_ATLAS: {
       j["ats_msi_width"]  = msi_width_;
       j["ats_msi_height"] = msi_height_;
-      j["ats_msi_num_atlas_segments_minus1"] =
+      j["ats_msi_num_atlas_segments_minus_1"] =
           segments_.empty() ? 0 : (uint32_t)segments_.size() - 1;
       if (mode_idc_ == ModeIdc::MULTISTREAM_ALPHA_ATLAS)
         j["ats_msi_alpha_segments_present_flag"] = msi_alpha_segments_present_;
