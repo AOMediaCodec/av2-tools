@@ -17,11 +17,31 @@
 
 namespace av2_obu {
 
+// film_grain_config() per AV2 spec §film_grain_config_syntax (05_Syntax_structures.bs:4159).
+// Reads at most 1 + 19 bits depending on conditions; updates fhi.{apply_grain, fgm_id, grain_seed}.
+static void parse_film_grain_config(BitstreamReader& br, const AV2SequenceHeader& sh,
+                                    FrameHeaderInfo& fhi) {
+  if (!sh.film_grain_params_present ||
+      (!fhi.immediate_output_frame && !fhi.implicit_output_frame)) {
+    fhi.apply_grain = 0;
+  } else if (sh.single_picture_header_flag) {
+    fhi.apply_grain = 1;
+  } else {
+    fhi.apply_grain = br.read_bit();
+  }
+  if (fhi.apply_grain) {
+    fhi.fgm_id = br.read_bits(3);
+    // load_grain_model() is decoder state — not parsed.
+    fhi.grain_seed = br.read_bits(16);
+  }
+}
+
 bool FrameHeaderInfo::parse_lightweight(BitstreamReader& br, OBUType obu_type,
                                         const AV2SequenceHeader& sh) {
-  // Derive frame classification from OBU type (spec helper functions)
-  (void)is_key_frame_obu(obu_type);  // TODO: use keyFrame when deep parsing is complete
-  bool IsBridge = (obu_type == OBUType::BRIDGE_FRAME);
+  // Frame classification flags. The spec helper `keyFrame` (CLK || OLK) is only used
+  // for state we don't track in lightweight (LCR activation, RefValid reset, OlkEncountered),
+  // so we don't bind it. IsBridge is needed locally and exposed in the struct.
+  IsBridge = (obu_type == OBUType::BRIDGE_FRAME);
 
   // --- cur_mfh_id ---
   if (IsBridge) {
@@ -35,12 +55,10 @@ bool FrameHeaderInfo::parse_lightweight(BitstreamReader& br, OBUType obu_type,
     seq_header_id_in_frame_header = br.read_uvlc();
   }
 
-  // --- Bridge frame ref idx (skip for now) ---
+  // --- Bridge frame ref idx (spec line 60-63) ---
   if (IsBridge) {
     uint32_t n = CeilLog2(sh.inter_config.NumRefFrames);
-    if (n > 0) {
-      br.read_bits(n);  // bridge_frame_ref_idx
-    }
+    bridge_frame_ref_idx = (n > 0) ? br.read_bits(n) : 0;
   }
 
   uint32_t allFrames = (1 << sh.inter_config.NumRefFrames) - 1;
@@ -69,10 +87,16 @@ bool FrameHeaderInfo::parse_lightweight(BitstreamReader& br, OBUType obu_type,
       // For SEF: refresh_frame_flags = 0, FrameType derived from ref
       refresh_frame_flags = 0;
       immediate_output_frame = 1;
+      // Spec §frame_header_info: film_grain_config() is called here, before the early
+      // return. Must consume its bits to keep the bitstream pointer correct for any
+      // subsequent (deep) parsing of this OBU.
+      parse_film_grain_config(br, sh, *this);
       TipFrameMode = TIP_FRAME_DISABLED;
       // Frame dimensions come from the referenced frame (not signaled here)
       FrameWidth = static_cast<uint32_t>(sh.max_frame_width_minus_1) + 1;
       FrameHeight = static_cast<uint32_t>(sh.max_frame_height_minus_1) + 1;
+      // SEF always produces an output picture (the previously decoded frame is shown).
+      is_output_frame = true;
       parsed = true;
       return true;
     }
@@ -165,6 +189,11 @@ bool FrameHeaderInfo::parse_lightweight(BitstreamReader& br, OBUType obu_type,
     }
   }
 
+  // --- bridge_frame_overwrite_flag (spec line 207, BEFORE refresh_frame_flags) ---
+  if (IsBridge) {
+    bridge_frame_overwrite_flag = br.read_bit();
+  }
+
   // --- refresh_frame_flags ---
   if (FrameType == KEY_FRAME) {
     if (obu_type == OBUType::CLK && sh.max_mlayer_id == 0) {
@@ -176,10 +205,9 @@ bool FrameHeaderInfo::parse_lightweight(BitstreamReader& br, OBUType obu_type,
     } else {
       refresh_frame_flags = br.read_bits(sh.inter_config.NumRefFrames);
     }
-  } else if (IsBridge) {
-    // Bridge: refresh_frame_flags depends on bridge_frame_overwrite_flag
-    // For lightweight, skip — not critical for basic packaging
-    refresh_frame_flags = 0;
+  } else if (IsBridge && !bridge_frame_overwrite_flag) {
+    // Spec line 237-238: bridge with !overwrite refreshes only the slot it replaces.
+    refresh_frame_flags = 1u << bridge_frame_ref_idx;
   } else if (obu_type == OBUType::RAS_FRAME && sh.max_mlayer_id == 0) {
     // RAS with single layer: refresh non-long-term refs
     // For lightweight, approximate as 0 (full logic needs ref state)
@@ -188,6 +216,7 @@ bool FrameHeaderInfo::parse_lightweight(BitstreamReader& br, OBUType obu_type,
     refresh_frame_flags = br.read_bits(sh.inter_config.NumRefFrames);
   } else if (sh.inter_config.enable_short_refresh_frame_flags && FrameType != SWITCH_FRAME &&
              FrameType != KEY_FRAME) {
+    // Bridge with overwrite==1 falls through here when SH enables short flags.
     has_refresh_frame_flags = br.read_bit();
     if (has_refresh_frame_flags) {
       uint32_t n = CeilLog2(sh.inter_config.NumRefFrames);
@@ -243,16 +272,20 @@ bool FrameHeaderInfo::parse_lightweight(BitstreamReader& br, OBUType obu_type,
     ref_frame_idx.resize(NumTotalRefs);
     for (uint32_t i = 0; i < NumTotalRefs; i++) {
       if (IsBridge) {
-        ref_frame_idx[i] = 0;  // bridge_frame_ref_idx (already parsed above)
+        // Spec line 297-298: ref_frame_idx[i] = bridge_frame_ref_idx (already parsed above).
+        ref_frame_idx[i] = bridge_frame_ref_idx;
       } else if (explicitRefFrameMap) {
         uint32_t n = CeilLog2(sh.inter_config.NumRefFrames);
         ref_frame_idx[i] = (n > 0) ? br.read_bits(n) : 0;
       }
     }
 
-    // --- frame_size / frame_size_with_refs ---
+    // --- frame_size / frame_size_with_refs / frame_size_with_bridge ---
     if (IsBridge) {
-      // frame_size_with_bridge: read bridge dims
+      // frame_size_with_bridge: read bridge_frame_{width,height}_minus_1.
+      // Spec also clamps via Min(RefFrame{Width,Height}[bridge_frame_ref_idx], ...);
+      // we lack ref state in lightweight mode, so we report the bitstream value + 1
+      // (an upper bound on the actual FrameWidth/FrameHeight).
       uint32_t w_bits = sh.frame_width_bits_minus_1 + 1;
       uint32_t h_bits = sh.frame_height_bits_minus_1 + 1;
       FrameWidth = br.read_bits(w_bits) + 1;
@@ -305,16 +338,43 @@ bool FrameHeaderInfo::parse_lightweight(BitstreamReader& br, OBUType obu_type,
       }
     }
 
+    // --- use_ref_frame_mvs (spec line 331-336) ---
+    if (FrameType == SWITCH_FRAME || !sh.inter_config.enable_ref_frame_mvs || IsBridge ||
+        bru_inactive) {
+      use_ref_frame_mvs = 0;
+    } else {
+      use_ref_frame_mvs = br.read_bit();
+    }
+
+    // --- tmvp_sample_step_minus_1 (spec line 337-342) ---
+    // Per-frame SbSize: 256x256 promotes to BLOCK_256X256 only for non-intra frames.
+    BlockSize SbSize;
+    if (sh.partition_config.use_256x256_superblock) {
+      SbSize = FrameIsIntra ? BLOCK_128X128 : BLOCK_256X256;
+    } else if (sh.partition_config.use_128x128_superblock) {
+      SbSize = BLOCK_128X128;
+    } else {
+      SbSize = BLOCK_64X64;
+    }
+    if (use_ref_frame_mvs && NumTotalRefs > 1 && SbSize != BLOCK_64X64) {
+      tmvp_sample_step_minus_1 = br.read_bit();
+    }
+
     // LIGHTWEIGHT STOP for inter frames
-    // (skip: use_ref_frame_mvs, TIP details, screen_content_params,
-    //  intrabc_params, MV precision, interpolation filter, motion modes, etc.)
+    // (skip: enable_tip block, screen_content_params, intrabc_params, MV precision,
+    //  interpolation filter, motion modes, etc.)
+    // TipFrameMode here is left at the default (TIP_FRAME_DISABLED). The spec assigns
+    // TipFrameMode either to TIP_FRAME_AS_OUTPUT (when EnableTipOutput && is_tip_frame())
+    // or from `f(1) tip_frame_mode` — both are inside the enable_tip block we skip.
     TipFrameMode = TIP_FRAME_DISABLED;
-    // Note: TipFrameMode would need deeper parsing of enable_tip conditions
-    // and use_ref_frame_mvs. For lightweight packaging, we know TIP OBUs
-    // set TIP_FRAME_AS_OUTPUT from the OBU type (handled by TIP OBU class).
   }
 
   parsed = true;
+  // is_output_frame: derived from the per-frame output flags. SEF returns earlier with
+  // is_output_frame = true. For other paths, single_picture_header_flag forces
+  // immediate_output_frame = 1, otherwise immediate_output_frame and implicit_output_frame
+  // are read from the bitstream above.
+  is_output_frame = (immediate_output_frame != 0) || (implicit_output_frame != 0);
   return true;
 }
 
@@ -341,17 +401,24 @@ json FrameHeaderInfo::to_json() const {
     j["seq_header_id_in_frame_header"] = seq_header_id_in_frame_header;
   }
 
-  // Frame type
+  // Frame type: emit only when reliably known. For SEF the spec sets FrameType from
+  // RefFrameType[frame_to_show_map_idx] (decoder reference state we don't track), so
+  // skip emission to avoid reporting the constructor default.
   const char* frame_type_names[] = {"KEY_FRAME", "INTER_FRAME", "INTRA_ONLY_FRAME", "SWITCH_FRAME"};
-  j["FrameType"] = (FrameType <= 3) ? frame_type_names[FrameType] : "UNKNOWN";
-  j["FrameIsIntra"] = FrameIsIntra;
-  j["ShowExistingFrame"] = ShowExistingFrame;
+  if (!ShowExistingFrame) {
+    j["FrameType"] = (FrameType <= 3) ? frame_type_names[FrameType] : "UNKNOWN";
+  }
 
   if (ShowExistingFrame) {
     j["frame_to_show_map_idx"] = frame_to_show_map_idx;
     j["derive_sef_order_hint"] = derive_sef_order_hint;
     if (derive_sef_order_hint == 0) {
       j["sef_order_hint"] = sef_order_hint;
+    }
+    if (apply_grain) {
+      j["apply_grain"] = apply_grain;
+      j["fgm_id"] = fgm_id;
+      j["grain_seed"] = grain_seed;
     }
   }
 
@@ -362,13 +429,17 @@ json FrameHeaderInfo::to_json() const {
 
     if (FrameType == KEY_FRAME && LongTermId >= 0) {
       j["long_term_id_plus_1"] = long_term_id_plus_1;
-      j["LongTermId"] = LongTermId;
     }
 
     j["immediate_output_frame"] = immediate_output_frame;
     j["implicit_output_frame"] = implicit_output_frame;
     j["frame_size_override_flag"] = frame_size_override_flag;
-    j["order_hint"] = order_hint;
+    // For bridge frames, order_hint comes from RefOrderHintLsbs[bridge_frame_ref_idx]
+    // (decoder ref state) — not from the bitstream — so we skip emission rather than
+    // report the placeholder 0.
+    if (!IsBridge) {
+      j["order_hint"] = order_hint;
+    }
     j["primary_ref_frame"] = primary_ref_frame;
     j["refresh_frame_flags"] = refresh_frame_flags;
     j["FrameWidth"] = FrameWidth;
@@ -384,10 +455,36 @@ json FrameHeaderInfo::to_json() const {
         j["bru_ref"] = bru_ref;
         j["bru_inactive"] = bru_inactive;
       }
+      j["use_ref_frame_mvs"] = use_ref_frame_mvs;
+      if (use_ref_frame_mvs) {
+        j["tmvp_sample_step_minus_1"] = tmvp_sample_step_minus_1;
+      }
     }
 
-    j["TipFrameMode"] = TipFrameMode;
+    if (IsBridge) {
+      j["bridge_frame_ref_idx"] = bridge_frame_ref_idx;
+      j["bridge_frame_overwrite_flag"] = bridge_frame_overwrite_flag;
+    }
+
+    if (apply_grain) {
+      j["apply_grain"] = apply_grain;
+      j["fgm_id"] = fgm_id;
+      j["grain_seed"] = grain_seed;
+    }
   }
+
+  // Computed values not directly serialized in the bitstream (no f(N) descriptor).
+  // Placed under a "derived" sub-object to keep them visually distinct from
+  // bitstream-read fields above.
+  json derived = json::object();
+  derived["FrameIsIntra"] = FrameIsIntra;
+  derived["ShowExistingFrame"] = ShowExistingFrame;
+  derived["is_output_frame"] = is_output_frame;
+  derived["TipFrameMode"] = TipFrameMode;
+  if (FrameType == KEY_FRAME && LongTermId >= 0) {
+    derived["LongTermId"] = LongTermId;
+  }
+  j["derived"] = derived;
 
   return j;
 }
