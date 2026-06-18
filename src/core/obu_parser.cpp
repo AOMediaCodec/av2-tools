@@ -16,6 +16,7 @@
 #include <iostream>
 
 #include <av2_obu/core/obu_parser.h>
+#include <av2_obu/obus/content_interpretation_obu.h>
 #include <av2_obu/obus/sequence_header_obu.h>
 #include <av2_obu/version.h>
 
@@ -230,6 +231,21 @@ OBUParser::Statistics OBUParser::get_statistics() const {
       case OBUType::OPERATING_POINT_SET:
         stats.config.has_operating_point_set = true;
         break;
+
+      case OBUType::CONTENT_INTERPRETATION: {
+        // Capture the first CI OBU encountered. Multistream may have multiple CI
+        // OBUs (one per xlayer); per-xlayer surfacing is future work.
+        if (!stats.content_interpretation.present) {
+          stats.content_interpretation.present = true;
+          if (auto* ci = dynamic_cast<const ContentInterpretationOBU*>(obu.get())) {
+            if (ci->has_timing_info()) {
+              stats.content_interpretation.has_timing_info = true;
+              stats.content_interpretation.timing_info = ci->get_timing_info();
+            }
+          }
+        }
+        break;
+      }
 
       default:
         break;

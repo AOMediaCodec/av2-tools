@@ -21,6 +21,7 @@
 #include <string>
 #include <vector>
 
+#include <av2_obu/core/av2_sequence_header.h>
 #include <av2_obu/core/av2_types.h>
 #include <av2_obu/core/base_obu.h>
 #include <av2_obu/core/temporal_unit.h>
@@ -113,6 +114,14 @@ public:
       bool has_layer_config = false;
       bool has_operating_point_set = false;
     } config;
+
+    // Content Interpretation OBU info (first CI OBU encountered in the stream).
+    // For multistream, future work may need per-xlayer breakdown.
+    struct ContentInterpretationInfo {
+      bool present = false;
+      bool has_timing_info = false;
+      TimingInfo timing_info;  // valid iff has_timing_info
+    } content_interpretation;
   };
   Statistics get_statistics() const;
 
