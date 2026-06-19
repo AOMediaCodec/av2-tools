@@ -48,6 +48,7 @@ target_sources(av2_obu
     src/core/obu_parser.cpp
     src/core/base_obu.cpp
     src/core/bitstream_reader.cpp
+    src/core/bitstream_writer.cpp
     src/core/av2_sequence_header.cpp
     src/core/av2_types.cpp
     src/core/temporal_unit.cpp
@@ -91,6 +92,7 @@ target_sources(av2_obu
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/av2_obu/core/obu_parser.h>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/av2_obu/core/base_obu.h>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/av2_obu/core/bitstream_reader.h>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/av2_obu/core/bitstream_writer.h>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/av2_obu/core/av2_sequence_header.h>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/av2_obu/core/av2_types.h>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/av2_obu/core/temporal_unit.h>

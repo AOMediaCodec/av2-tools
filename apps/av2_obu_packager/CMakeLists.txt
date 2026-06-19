@@ -1,6 +1,7 @@
 add_executable(av2_obu_packager
   main.cpp
   packaging_strategy.cpp
+  av2_codec_config.cpp
 )
 
 target_link_libraries(av2_obu_packager
