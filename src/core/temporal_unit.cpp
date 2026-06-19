@@ -12,16 +12,59 @@
 #include <av2_obu/core/base_obu.h>
 #include <av2_obu/core/temporal_unit.h>
 
+#include <set>
+
 namespace av2_obu {
 
-bool TemporalUnit::is_keyframe() const {
+namespace {
+
+// Coded frame OBU types per AV2 spec (anything carrying frame data for an extended layer)
+bool is_coded_frame_obu(OBUType t) {
+  return is_tile_group(t) || is_tip_frame(t) || is_sef(t) || t == OBUType::BRIDGE_FRAME;
+}
+
+bool is_hls_obu(OBUType t) {
+  return t == OBUType::SEQUENCE_HEADER || t == OBUType::LAYER_CONFIGURATION_RECORD ||
+         t == OBUType::OPERATING_POINT_SET;
+}
+
+}  // namespace
+
+bool TemporalUnit::is_sync_sample() const {
+  // Per av2-isobmff this TU is a sync sample if every coded extended layer unit present is a CLK
+  // We rely on AV2 TU ordering: within an xlayer's CLU, frames come in
+  // ascending mlayer order, so the FIRST coded frame OBU we encounter per
+  // xlayer in bitstream order IS the first frame at that xlayer's lowest present mlayer 
+  std::set<uint8_t> seen_xlayers;
+  bool any_frame = false;
   for (const auto* obu : obus_) {
-    auto type = obu->type();
-    if (type == OBUType::CLK || type == OBUType::OLK) {
-      return true;
-    }
+    if (!is_coded_frame_obu(obu->type())) continue;
+    uint8_t xid = obu->header().get_xlayer_id();
+    if (!seen_xlayers.insert(xid).second) continue;  // already saw this xlayer's first frame
+    if (obu->type() != OBUType::CLK) return false;
+    any_frame = true;
   }
-  return false;
+  return any_frame;
+}
+
+std::vector<const BaseOBU*> TemporalUnit::hls_obus() const {
+  std::vector<const BaseOBU*> out;
+  for (const auto* obu : obus_) {
+    if (is_hls_obu(obu->type())) out.push_back(obu);
+  }
+  return out;
+}
+
+std::vector<const BaseOBU*> TemporalUnit::sample_obus(bool keep_td) const {
+  std::vector<const BaseOBU*> out;
+  for (const auto* obu : obus_) {
+    auto t = obu->type();
+    if (is_hls_obu(t)) continue;            // belongs in configOBUs
+    if (t == OBUType::PADDING) continue;    // forbidden in samples per av2-isobmff
+    if (t == OBUType::TEMPORAL_DELIMITER && !keep_td) continue;  // sample boundary == TU boundary
+    out.push_back(obu);
+  }
+  return out;
 }
 
 size_t TemporalUnit::total_size() const {
@@ -37,7 +80,7 @@ nlohmann::json TemporalUnit::to_json() const {
   nlohmann::json j;
   j["index"] = index_;
   j["obu_count"] = obu_count();
-  j["is_keyframe"] = is_keyframe();
+  j["is_sync_sample"] = is_sync_sample();
   j["display_order"] = display_order_;
   j["total_size"] = total_size();
 

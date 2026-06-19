@@ -134,7 +134,6 @@ private:
   uint32_t read_annex_b_size(std::ifstream& ifs, uint32_t& value);
 
   void build_temporal_units();
-  bool is_config_obu(const BaseOBU* obu) const;
 
   std::string current_file_;
   std::vector<std::unique_ptr<BaseOBU>> obus_;

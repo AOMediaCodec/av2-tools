@@ -26,11 +26,21 @@ public:
   size_t obu_count() const { return obus_.size(); }
   bool empty() const { return obus_.empty(); }
 
-  bool is_keyframe() const;
+  // True if this TU is a sync sample per av2-isobmff spec
+  bool is_sync_sample() const;
+
   uint32_t display_order() const { return display_order_; }
 
+  // All OBUs in this TU as parsed from the bitstream (no filtering)
   const std::vector<const BaseOBU*>& obus() const { return obus_; }
   const BaseOBU* obu(size_t index) const { return obus_[index]; }
+
+  // Packager-oriented filtered views (computed on demand).
+  // Can be used to drive sample-entry transitions on SH change.
+  std::vector<const BaseOBU*> hls_obus() const;
+
+  // OBUs that go into the ISOBMFF sample bytes.
+  std::vector<const BaseOBU*> sample_obus(bool keep_td = false) const;
 
   auto begin() const { return obus_.begin(); }
   auto end() const { return obus_.end(); }
@@ -45,7 +55,6 @@ private:
   size_t index_ = 0;
   std::vector<const BaseOBU*> obus_;
   uint32_t display_order_ = 0;
-  bool is_keyframe_ = false;
 };
 
 }  // namespace av2_obu

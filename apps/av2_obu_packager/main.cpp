@@ -111,15 +111,15 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  size_t keyframe_count = 0;
+  size_t sync_sample_count = 0;
   for (const auto& tu : temporal_units) {
-    if (tu.is_keyframe()) {
-      keyframe_count++;
+    if (tu.is_sync_sample()) {
+      sync_sample_count++;
     }
   }
 
   spdlog::info("  {} temporal units (MP4 samples)", temporal_units.size());
-  spdlog::info("  {} keyframe samples", keyframe_count);
+  spdlog::info("  {} sync samples", sync_sample_count);
   spdlog::info("");
 
   // ========================================================================

@@ -310,14 +310,12 @@ void OBUParser::build_temporal_units() {
   TemporalUnit current_tu;
   current_tu.index_ = 0;
 
+  // Every parsed OBU lands in the TU it belongs to.
+  // Tools that want a ground-truth view consume tu.obus().
+  // The packager applies its own filters via tu.sample_obus() / tu.hls_obus().
   for (const auto& obu : obus_) {
-    if (is_config_obu(obu.get())) {
-      continue;
-    }
-
     if (obu->type() == OBUType::TEMPORAL_DELIMITER) {
       if (!current_tu.empty()) {
-        current_tu.is_keyframe_ = current_tu.is_keyframe();
         temporal_units_.push_back(std::move(current_tu));
         current_tu = TemporalUnit();
         current_tu.index_ = temporal_units_.size();
@@ -332,17 +330,10 @@ void OBUParser::build_temporal_units() {
   }
 
   if (!current_tu.empty()) {
-    current_tu.is_keyframe_ = current_tu.is_keyframe();
     temporal_units_.push_back(std::move(current_tu));
   }
 
   spdlog::debug("Built {} temporal units", temporal_units_.size());
-}
-
-bool OBUParser::is_config_obu(const BaseOBU* obu) const {
-  auto type = obu->type();
-  return type == OBUType::SEQUENCE_HEADER || type == OBUType::LAYER_CONFIGURATION_RECORD ||
-         type == OBUType::OPERATING_POINT_SET;
 }
 
 }  // namespace av2_obu
