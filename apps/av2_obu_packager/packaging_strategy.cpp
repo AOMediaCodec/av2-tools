@@ -17,28 +17,37 @@ namespace av2_obu {
 
 PackagingStrategy determine_strategy(const OBUParser::Statistics& stats,
                                      const UserOptions& user_opts) {
-  PackagingStrategy strategy;
+  PackagingStrategy s;
 
-  // Timing parameters
-  strategy.frame_rate = user_opts.frame_rate;
-  strategy.timescale = static_cast<uint32_t>(user_opts.frame_rate * 1000);
-  strategy.drop_temporal_delimiters = user_opts.drop_temporal_delimiters;
+  // Pass-through user opts
+  s.drop_temporal_delimiters = user_opts.drop_temporal_delimiters;
+  s.samples_per_chunk = user_opts.samples_per_chunk;
+  s.start_tu = user_opts.start_tu;
+  s.num_samples = user_opts.num_samples;
 
-  // Determine sample entry strategy
-  if (stats.sequence_headers.has_changes) {
-    spdlog::info("Multiple different sequence headers detected");
-    spdlog::info("Strategy: Will use multiple sample entries");
-    strategy.sample_entry_mode = PackagingStrategy::SampleEntryMode::kMultiple;
-  } else {
-    spdlog::info("Strategy: Using single sample entry");
-    strategy.sample_entry_mode = PackagingStrategy::SampleEntryMode::kSingle;
-  }
+  // Timing — CLI takes precedence today. CI timing_info() will land in Step 8.
+  s.frame_rate = user_opts.frame_rate;
+  s.timescale = static_cast<uint32_t>(user_opts.frame_rate * 1000);
+  s.default_sample_duration = 1000;
+  s.timing_source = PackagingStrategy::TimingSource::kCli;
 
-  // Log additional info
-  spdlog::info("Timing: {} fps (timescale: {})", strategy.frame_rate, strategy.timescale);
-  spdlog::info("Drop TDs from samples: {}", strategy.drop_temporal_delimiters ? "yes" : "no");
+  // Sample entry mode: any SH change → multiple entries.
+  s.sample_entry_mode = stats.sequence_headers.has_changes
+                          ? PackagingStrategy::SampleEntryMode::kMultiple
+                          : PackagingStrategy::SampleEntryMode::kSingle;
 
-  return strategy;
+  // any_non_monotonic and ctts wiring land in Step 5.3 — needs SH access
+  // beyond what Statistics currently exposes.
+
+  spdlog::debug("Strategy: sample_entry_mode={}",
+                s.sample_entry_mode == PackagingStrategy::SampleEntryMode::kMultiple ? "kMultiple"
+                                                                                     : "kSingle");
+  spdlog::debug("Strategy: timescale={}, duration={}, source=CLI", s.timescale,
+                s.default_sample_duration);
+  spdlog::debug("Strategy: drop_TDs={}, samples_per_chunk={}",
+                s.drop_temporal_delimiters ? "yes" : "no", s.samples_per_chunk);
+
+  return s;
 }
 
 }  // namespace av2_obu

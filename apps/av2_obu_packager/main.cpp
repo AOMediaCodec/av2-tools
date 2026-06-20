@@ -13,20 +13,14 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
 
+#include "av2_packager.h"
 #include "packaging_strategy.h"
 #include <av2_obu/av2_obu.h>
 #include <av2_obu/version.h>
 
-// libisomedia headers
-#include <fstream>
-#include <iostream>
-
-#include <ISOMovies.h>
-#include <MP4Movies.h>
-
 using namespace av2_obu;
 
-void setup_logging(bool verbose) {
+static void setup_logging(bool verbose) {
   auto console = spdlog::stdout_color_mt("console");
   spdlog::set_default_logger(console);
   spdlog::set_level(verbose ? spdlog::level::debug : spdlog::level::info);
@@ -35,130 +29,59 @@ void setup_logging(bool verbose) {
 }
 
 int main(int argc, char** argv) {
-  CLI::App app{"AV2 OBU Packager - Package AV2 bitstreams into MP4 containers"};
+  CLI::App app{"AV2 OBU Packager — Package AV2 bitstreams into MP4 containers"};
   app.set_version_flag("--version", av2_obu::build_version());
 
-  // Global options
-  bool verbose = false;
-  app.add_flag("-v,--verbose", verbose, "Enable verbose/debug logging");
-
-  // Input/output
   std::string input;
   std::string output;
+  UserOptions opts;
+  bool verbose = false;
 
   app.add_option("input", input, "Input AV2 bitstream (.bin, .obu, .av2)")->required();
   app.add_option("-o,--output", output, "Output MP4 file")->required();
-
-  // Packaging options
-  double frame_rate = 30.0;
-  bool drop_tds = true;
-
-  app.add_option("--fps", frame_rate, "Frame rate (default: 30.0)");
-  app.add_flag("--keep-td,!--drop-td", drop_tds,
+  app.add_option("--fps", opts.frame_rate, "Frame rate (default: 30.0)");
+  app.add_option("--samples-per-chunk", opts.samples_per_chunk,
+                 "Samples per chunk in stsc (default: 30)");
+  app.add_option("--start-tu", opts.start_tu,
+                 "Start packaging at this TU index (0-based; should be a sync sample)");
+  app.add_option("--num-samples", opts.num_samples,
+                 "Maximum samples to write (0 = all from start)");
+  app.add_flag("--keep-td,!--drop-td", opts.drop_temporal_delimiters,
                "Keep temporal delimiters in samples (default: drop)");
+  app.add_flag("-v,--verbose", verbose, "Enable verbose/debug logging");
 
   CLI11_PARSE(app, argc, argv);
-
   setup_logging(verbose);
 
   spdlog::info("=== AV2 OBU Packager ===");
-  spdlog::info("Input: {}", input);
+  spdlog::info("Input:  {}", input);
   spdlog::info("Output: {}", output);
-  spdlog::info("");
 
-  // ========================================================================
-  // PHASE 1: Parse bitstream and build temporal units
-  // ========================================================================
-  spdlog::info("Phase 1: Parsing bitstream...");
-
+  // --- Parse the bitstream ---
   OBUParser parser;
-  parser.set_include_temporal_delimiters(!drop_tds);
-
+  parser.set_include_temporal_delimiters(!opts.drop_temporal_delimiters);
   if (!parser.parse_file(input)) {
     spdlog::error("Failed to parse bitstream");
     return 1;
   }
 
-  spdlog::info("  Parsed {} OBUs", parser.obu_count());
-  spdlog::info("  Built {} temporal units", parser.temporal_unit_count());
-  spdlog::info("");
+  // --- Derive packaging strategy from stats + user options ---
+  const PackagingStrategy strategy = determine_strategy(parser.get_statistics(), opts);
+  log_stream_summary(parser);  // verbose-only
 
-  // ========================================================================
-  // PHASE 2: Analyze bitstream characteristics
-  // ========================================================================
-  spdlog::info("Phase 2: Analyzing bitstream...");
-  auto stats = parser.get_statistics();
-
-  spdlog::info("  Total OBUs: {}", stats.total_obus);
-  spdlog::info("  Total bytes: {}", stats.total_bytes);
-  spdlog::info("  Sequence headers: {}{}", stats.sequence_headers.count,
-               stats.sequence_headers.has_changes ? " (with changes)" : "(identical)");
-  spdlog::info("  Temporal delimiter count: {}", stats.temporal.td_count);
-  spdlog::info("  Frames: {} ({} keyframes)", stats.frames.total_frames,
-               stats.frames.keyframe_count);
-  spdlog::info("  Single layer: {}", stats.layers.is_single_layer ? "yes" : "no");
-  spdlog::info("");
-
-  // ========================================================================
-  // PHASE 3: Access temporal units from parser
-  // ========================================================================
-  spdlog::info("Phase 3: Processing temporal units...");
-
-  const auto& temporal_units = parser.temporal_units();
-
-  if (temporal_units.empty()) {
-    spdlog::error("No temporal units created!");
+  // --- Pre-flight check ---
+  if (parser.temporal_units().empty()) {
+    spdlog::error("No temporal units; nothing to package");
     return 1;
   }
 
-  size_t sync_sample_count = 0;
-  for (const auto& tu : temporal_units) {
-    if (tu.is_sync_sample()) {
-      sync_sample_count++;
-    }
-  }
-
-  spdlog::info("  {} temporal units (MP4 samples)", temporal_units.size());
-  spdlog::info("  {} sync samples", sync_sample_count);
-  spdlog::info("");
-
-  // ========================================================================
-  // PHASE 4: Write MP4 (TODO: Implement fully)
-  // ========================================================================
-  spdlog::info("Phase 4: Writing MP4...");
-  spdlog::warn("MP4 writing not yet fully implemented!");
-  spdlog::warn("TODO:");
-  spdlog::warn("  - Create sample entry with av2C box");
-  spdlog::warn("  - Write temporal units as samples");
-  spdlog::warn("  - Handle sync samples (keyframes)");
-  spdlog::warn("  - Set correct timing");
-
-  // For now, just create an empty MP4 to test libisomedia
-  MP4Movie moov;
-  MP4Err err = MP4NewMovie(&moov, 1, 0xff, 0xff, 0xff, 0xff, 0xff);
-  if (err != MP4NoErr) {
-    spdlog::error("Failed to create MP4 movie, error code: {}", err);
+  // --- Package ---
+  Av2Packager packager(input, strategy);
+  if (!packager.package(parser, output)) {
+    spdlog::error("Packaging failed");
     return 1;
   }
 
-  // Set brands
-  ISOSetMovieBrand(moov, ISOISOBrand, 1);
-  ISOSetMovieCompatibleBrand(moov, ISOISOBrand);
-  ISOSetMovieCompatibleBrand(moov, MP4_FOUR_CHAR_CODE('a', 'v', '0', '2'));
-
-  spdlog::info("Writing placeholder MP4 to: {}", output);
-  err = MP4WriteMovieToFile(moov, output.c_str());
-  if (err != MP4NoErr) {
-    spdlog::error("Failed to write MP4 file, error code: {}", err);
-    MP4DisposeMovie(moov);
-    return 1;
-  }
-
-  MP4DisposeMovie(moov);
-
-  spdlog::info("");
-  spdlog::info("Success! (Note: MP4 writing is incomplete - placeholder file created)");
-  spdlog::info("Next steps: Implement full MP4 track and sample writing");
-
+  spdlog::info("Done: {}", output);
   return 0;
 }
