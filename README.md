@@ -6,7 +6,7 @@ Tools developed within the AOMedia Storage and Transport Formats (STF) Working G
 
 ```bash
 mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Debug -DBUILD_PACKAGER=ON -DBUILD_EXAMPLES=ON
+cmake .. -DCMAKE_BUILD_TYPE=Debug -DBUILD_CONTAINER_TOOLS=ON -DBUILD_EXAMPLES=ON
 make -j
 ```
 
@@ -20,7 +20,8 @@ The project builds several applications that use the `libav2_obu.a`:
 
 - [**av2_obu_tool**](./apps/av2_obu_tool/) - Parse, dump, and analyze AV2 bitstreams (JSON export, statistics)
 - [**av2_obu_switcher**](./apps/av2_obu_switcher/) - Bitstream switching experiments
-- [**av2_obu_packager**](./apps/av2_obu_packager/) - Package AV2 into MP4 containers (requires `-DBUILD_PACKAGER=ON`)
+- [**av2_mux**](./apps/av2_mux/) - Mux AV2 elementary stream into MP4/ISOBMFF (requires `-DBUILD_CONTAINER_TOOLS=ON`)
+- [**av2_demux**](./apps/av2_demux/) - Demux MP4/ISOBMFF back to an AV2 elementary stream (requires `-DBUILD_CONTAINER_TOOLS=ON`)
 - [**av2_obu_channel_sim**](./apps/av2_obu_channel_sim/) - Simulate packet loss and network conditions
 
 ## Requirements

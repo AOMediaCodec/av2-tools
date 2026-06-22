@@ -24,9 +24,16 @@ bool SequenceHeaderOBU::parse_payload(std::ifstream& ifs) {
 
   spdlog::debug("Parsing AV2 sequence header payload ({} bytes)", position_.payload_size);
 
+  // Snapshot the raw payload bytes so callers (e.g. OBUParser::get_statistics) can
+  // detect SH-byte changes across the stream by direct comparison.
+  raw_payload_.resize(position_.payload_size);
+  if (!ifs.read(reinterpret_cast<char*>(raw_payload_.data()), position_.payload_size)) {
+    spdlog::error("Failed to read sequence header payload");
+    return false;
+  }
+
   try {
-    // Create bitstream reader from the payload
-    BitstreamReader br(ifs, position_.payload_size);
+    BitstreamReader br(raw_payload_);
 
     // Parse using the full AV2 sequence header parser
     if (!seq_header_.parse(br)) {
