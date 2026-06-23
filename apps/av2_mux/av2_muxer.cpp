@@ -58,7 +58,8 @@ bool Av2Muxer::package(const OBUParser& parser, const std::string& output_path) 
 
   // ISOBMFF §8.6.1.3 forbids ctts when CTS == DTS for every sample, so emit it
   // only after computing offsets and observing at least one non-zero.
-  std::vector<int32_t> ctts_offsets = compute_composition_offsets(tus, strategy_.start_tu, end_tu);
+  std::vector<int32_t> ctts_offsets = compute_composition_offsets(parser, tus,
+                                                                  strategy_.start_tu, end_tu);
   bool need_ctts = std::any_of(ctts_offsets.begin(), ctts_offsets.end(),
                                [](int32_t v) { return v != 0; });
   if (need_ctts) {
@@ -215,22 +216,35 @@ bool Av2Muxer::write_tu(const TemporalUnit& tu, int32_t composition_offset) {
 }
 
 std::vector<int32_t> Av2Muxer::compute_composition_offsets(
-    const std::vector<TemporalUnit>& tus, uint32_t start, uint32_t end) {
+    const OBUParser& parser, const std::vector<TemporalUnit>& tus, uint32_t start, uint32_t end) {
   std::vector<int32_t> offsets;
   if (!doh_lifter_) return offsets;
   offsets.reserve(end - start);
   const int64_t dur = static_cast<int64_t>(strategy_.default_sample_duration);
+  const SequenceHeaderOBU* first_sh = find_first_sequence_header(parser);
+  const AV2SequenceHeader& sh = first_sh->sequence_header();
+
   for (uint32_t i = start; i < end; ++i) {
     int32_t off = 0;
-    if (const BaseOBU* out = find_output_frame(tus[i])) {
-      if (const FrameHeaderInfo* fh = frame_header_of(out)) {
-        int64_t lifted_doh = doh_lifter_->lift(fh->order_hint);
-        int64_t cts = lifted_doh * dur;
-        int64_t dts = static_cast<int64_t>(i - start) * dur;
-        off = static_cast<int32_t>(cts - dts);
-      }
+    int64_t output_doh = -1;
+
+    // Process every coded frame OBU in this TU through the lifter so the ref
+    // buffer reflects the bitstream's decode-order state. The output frame's
+    // lifted DOH (the last is_output_frame=true frame in decode order, if any)
+    // determines this sample's ctts.
+    for (const auto* obu : tus[i].obus()) {
+      const FrameHeaderInfo* fh = frame_header_of(obu);
+      if (!fh) continue;
+      const int64_t doh = doh_lifter_->process(*obu, *fh, sh, ref_buffer_);
+      if (fh->is_output_frame) output_doh = doh;
     }
-    // Hidden-only TUs: no output picture, leave CTS == DTS.
+
+    if (output_doh >= 0) {
+      const int64_t cts = output_doh * dur;
+      const int64_t dts = static_cast<int64_t>(i - start) * dur;
+      off = static_cast<int32_t>(cts - dts);
+    }
+    // Hidden-only TUs: leave CTS == DTS (off stays 0).
     offsets.push_back(off);
   }
   return offsets;

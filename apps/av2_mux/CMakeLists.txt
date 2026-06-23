@@ -8,6 +8,7 @@ add_executable(av2_mux
   frame_header_helpers.cpp
   colr_info.cpp
   mux_log.cpp
+  ref_frame_buffer.cpp
 )
 
 target_link_libraries(av2_mux

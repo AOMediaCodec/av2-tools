@@ -21,6 +21,7 @@
 #include "display_order_lifter.h"
 #include "mp4_writer.h"
 #include "mux_strategy.h"
+#include "ref_frame_buffer.h"
 
 namespace av2_obu {
 
@@ -41,7 +42,8 @@ private:
   bool check_doh_lifter_supported(const OBUParser& parser);
   bool write_tu(const TemporalUnit& tu, int32_t composition_offset);
   bool assemble_sample_bytes(const TemporalUnit& tu, std::vector<uint8_t>& out);
-  std::vector<int32_t> compute_composition_offsets(const std::vector<TemporalUnit>& tus,
+  std::vector<int32_t> compute_composition_offsets(const OBUParser& parser,
+                                                   const std::vector<TemporalUnit>& tus,
                                                    uint32_t start, uint32_t end);
 
   static const SequenceHeaderOBU* find_first_sequence_header(const OBUParser& parser);
@@ -51,6 +53,7 @@ private:
   std::ifstream input_ifs_;
   Mp4Writer writer_;
   std::unique_ptr<DisplayOrderLifter> doh_lifter_;
+  RefFrameBuffer ref_buffer_;
   std::optional<ColrInfo> last_colr_;
 };
 
