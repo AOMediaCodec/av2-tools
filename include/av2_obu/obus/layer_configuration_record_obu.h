@@ -35,6 +35,7 @@ public:
     uint32_t max_level_idx = 0;
     uint32_t tier_flag = 0;
     uint32_t max_mlayer_count = 0;
+    uint32_t lsptli_reserved_2bits = 0;
   };
 
   // Aggregate info (global LCR)
@@ -142,6 +143,8 @@ private:
   uint32_t lcr_doh_constraint_flag_ = 0;
   uint32_t lcr_enforce_tile_alignment_flag_ = 0;
   uint32_t lcr_global_atlas_id_ = 0;
+  uint32_t lcr_global_reserved_zero_3bits_ = 0;
+  uint32_t lcr_global_reserved_zero_5bits_ = 0;
   AggregateInfo aggregate_info_;
   std::vector<uint32_t> xlayer_ids_;
   std::vector<XLayerPTL> xlayer_ptls_;
@@ -153,6 +156,8 @@ private:
   uint32_t lcr_profile_tier_level_info_present_flag_ = 0;
   uint32_t lcr_local_atlas_id_present_flag_ = 0;
   uint32_t lcr_local_atlas_id_ = 0;
+  uint32_t lcr_local_reserved_zero_3bits_ = 0;
+  uint32_t lcr_local_reserved_zero_5bits_ = 0;
   XLayerPTL local_ptl_;
   XLayerInfo local_xlayer_info_;
 };

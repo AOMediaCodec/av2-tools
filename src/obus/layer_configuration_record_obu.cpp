@@ -26,7 +26,7 @@ static LCROBU::XLayerPTL parse_ptl(BitstreamReader& br, uint32_t xlayer_id) {
   ptl.max_level_idx = br.read_bits(5);
   ptl.tier_flag = br.read_bit();
   ptl.max_mlayer_count = br.read_bits(3);
-  br.read_bits(2);  // lsptli_reserved_2bits
+  ptl.lsptli_reserved_2bits = br.read_bits(2);
   return ptl;
 }
 
@@ -169,9 +169,9 @@ bool LayerConfigurationRecordOBU::parse_payload(std::ifstream& ifs) {
     if (lcr_global_atlas_id_present_flag_) {
       lcr_global_atlas_id_ = br.read_bits(3);
     } else {
-      br.read_bits(3);  // reserved
+      lcr_global_reserved_zero_3bits_ = br.read_bits(3);
     }
-    br.read_bits(5);  // reserved
+    lcr_global_reserved_zero_5bits_ = br.read_bits(5);
 
     if (lcr_aggregate_info_present_flag_) {
       aggregate_info_.config_idc = br.read_bits(6);
@@ -232,9 +232,9 @@ bool LayerConfigurationRecordOBU::parse_payload(std::ifstream& ifs) {
     if (lcr_local_atlas_id_present_flag_) {
       lcr_local_atlas_id_ = br.read_bits(3);
     } else {
-      br.read_bits(3);  // reserved
+      lcr_local_reserved_zero_3bits_ = br.read_bits(3);
     }
-    br.read_bits(5);  // reserved
+    lcr_local_reserved_zero_5bits_ = br.read_bits(5);
 
     local_xlayer_info_ = parse_xlayer_info(br, false, lcr_local_atlas_id_present_flag_);
   }
@@ -327,7 +327,10 @@ json LayerConfigurationRecordOBU::to_json() const {
     j["lcr_enforce_tile_alignment_flag"] = lcr_enforce_tile_alignment_flag_;
     if (lcr_global_atlas_id_present_flag_) {
       j["lcr_global_atlas_id"] = lcr_global_atlas_id_;
+    } else {
+      j["lcr_global_reserved_zero_3bits"] = lcr_global_reserved_zero_3bits_;
     }
+    j["lcr_global_reserved_zero_5bits"] = lcr_global_reserved_zero_5bits_;
 
     if (lcr_aggregate_info_present_flag_) {
       j["aggregate_info"] = {{"config_idc", aggregate_info_.config_idc},
@@ -343,7 +346,8 @@ json LayerConfigurationRecordOBU::to_json() const {
                         {"seq_profile_idc", ptl.seq_profile_idc},
                         {"max_level_idx", ptl.max_level_idx},
                         {"tier_flag", ptl.tier_flag},
-                        {"max_mlayer_count", ptl.max_mlayer_count}});
+                        {"max_mlayer_count", ptl.max_mlayer_count},
+                        {"lsptli_reserved_2bits", ptl.lsptli_reserved_2bits}});
       }
       j["xlayer_ptl"] = ptls;
     }
@@ -371,11 +375,15 @@ json LayerConfigurationRecordOBU::to_json() const {
       j["local_ptl"] = {{"seq_profile_idc", local_ptl_.seq_profile_idc},
                         {"max_level_idx", local_ptl_.max_level_idx},
                         {"tier_flag", local_ptl_.tier_flag},
-                        {"max_mlayer_count", local_ptl_.max_mlayer_count}};
+                        {"max_mlayer_count", local_ptl_.max_mlayer_count},
+                        {"lsptli_reserved_2bits", local_ptl_.lsptli_reserved_2bits}};
     }
     if (lcr_local_atlas_id_present_flag_) {
       j["lcr_local_atlas_id"] = lcr_local_atlas_id_;
+    } else {
+      j["lcr_local_reserved_zero_3bits"] = lcr_local_reserved_zero_3bits_;
     }
+    j["lcr_local_reserved_zero_5bits"] = lcr_local_reserved_zero_5bits_;
     j["xlayer_info"] = xlayer_info_to_json(local_xlayer_info_);
   }
 
