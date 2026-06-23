@@ -10,6 +10,7 @@
  */
 
 #include <spdlog/spdlog.h>
+#include <av2_obu/core/logging.h>
 
 #include <av2_obu/core/av2_sequence_header.h>
 #include <av2_obu/core/bitstream_reader.h>
@@ -18,22 +19,22 @@
 namespace av2_obu {
 
 bool SwitchOBU::parse_payload(std::ifstream& ifs) {
-  spdlog::debug("Parsing SWITCH payload ({} bytes)", position_.payload_size);
+  LIB_DEBUG("Parsing SWITCH payload ({} bytes)", position_.payload_size);
 
   raw_payload_.resize(position_.payload_size);
   if (!ifs.read(reinterpret_cast<char*>(raw_payload_.data()), position_.payload_size)) {
-    spdlog::error("Failed to read SWITCH payload");
+    LIB_ERROR("Failed to read SWITCH payload");
     return false;
   }
 
   if (active_seq_header_) {
     BitstreamReader br(raw_payload_);
     if (!tile_group_header_.parse_lightweight(br, OBUType::SWITCH, *active_seq_header_)) {
-      spdlog::error("Failed to parse SWITCH tile group header");
+      LIB_ERROR("Failed to parse SWITCH tile group header");
       return false;
     }
     if (tile_group_header_.frame_header.parsed) {
-      spdlog::debug("SWITCH: order_hint={}, restricted_prediction={}",
+      LIB_DEBUG("SWITCH: order_hint={}, restricted_prediction={}",
                     tile_group_header_.frame_header.order_hint,
                     tile_group_header_.frame_header.restricted_prediction_switch);
     }
@@ -43,7 +44,7 @@ bool SwitchOBU::parse_payload(std::ifstream& ifs) {
       tile_group_header_.parse_deep(br, OBUType::SWITCH, *active_seq_header_);
     }
   } else {
-    spdlog::warn("SWITCH: no active sequence header — frame header not parsed");
+    LIB_WARN("SWITCH: no active sequence header — frame header not parsed");
   }
 
   return true;

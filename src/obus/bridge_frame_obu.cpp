@@ -10,6 +10,7 @@
  */
 
 #include <spdlog/spdlog.h>
+#include <av2_obu/core/logging.h>
 
 #include <av2_obu/core/av2_sequence_header.h>
 #include <av2_obu/core/bitstream_reader.h>
@@ -18,25 +19,25 @@
 namespace av2_obu {
 
 bool BridgeFrameOBU::parse_payload(std::ifstream& ifs) {
-  spdlog::debug("Parsing BRIDGE_FRAME payload ({} bytes)", position_.payload_size);
+  LIB_DEBUG("Parsing BRIDGE_FRAME payload ({} bytes)", position_.payload_size);
 
   raw_payload_.resize(position_.payload_size);
   if (!ifs.read(reinterpret_cast<char*>(raw_payload_.data()), position_.payload_size)) {
-    spdlog::error("Failed to read BRIDGE_FRAME payload");
+    LIB_ERROR("Failed to read BRIDGE_FRAME payload");
     return false;
   }
 
   if (active_seq_header_) {
     BitstreamReader br(raw_payload_);
     if (!frame_header_.parse_lightweight(br, OBUType::BRIDGE_FRAME, *active_seq_header_)) {
-      spdlog::error("Failed to parse BRIDGE_FRAME frame header");
+      LIB_ERROR("Failed to parse BRIDGE_FRAME frame header");
       return false;
     }
-    spdlog::debug("BRIDGE_FRAME: order_hint={}, refresh_flags=0x{:02x}, {}x{}",
+    LIB_DEBUG("BRIDGE_FRAME: order_hint={}, refresh_flags=0x{:02x}, {}x{}",
                   frame_header_.order_hint, frame_header_.refresh_frame_flags,
                   frame_header_.FrameWidth, frame_header_.FrameHeight);
   } else {
-    spdlog::warn("BRIDGE_FRAME: no active sequence header — frame header not parsed");
+    LIB_WARN("BRIDGE_FRAME: no active sequence header — frame header not parsed");
   }
 
   return true;

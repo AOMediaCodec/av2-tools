@@ -10,6 +10,7 @@
  */
 
 #include <spdlog/spdlog.h>
+#include <av2_obu/core/logging.h>
 
 #include <av2_obu/core/av2_sequence_header.h>
 #include <av2_obu/core/bitstream_reader.h>
@@ -266,7 +267,7 @@ bool FrameHeaderInfo::parse_lightweight(BitstreamReader& br, OBUType obu_type,
       // For lightweight, we can't resolve this without full state
       // Parse will continue but ref_frame_idx won't be populated
       NumTotalRefs = 0;
-      spdlog::debug("Implicit ref frame map — ref_frame_idx not available in lightweight mode");
+      LIB_DEBUG("Implicit ref frame map — ref_frame_idx not available in lightweight mode");
     }
 
     ref_frame_idx.resize(NumTotalRefs);
@@ -389,7 +390,7 @@ bool FrameHeaderInfo::parse_deep(BitstreamReader& /*br*/, OBUType /*obu_type*/,
   //   cdef_params(), lr_params(), ccso_params(), read_tx_mode(),
   //   frame_reference_mode(), skip_mode_params(), global_motion_params(),
   //   film_grain_config()
-  spdlog::debug("Deep frame header parsing not yet implemented");
+  LIB_DEBUG("Deep frame header parsing not yet implemented");
   return true;
 }
 

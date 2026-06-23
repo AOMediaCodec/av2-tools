@@ -10,23 +10,24 @@
  */
 
 #include <spdlog/spdlog.h>
+#include <av2_obu/core/logging.h>
 
 #include <av2_obu/obus/qm_obu.h>
 
 namespace av2_obu {
 
 bool QMOBU::parse_payload(std::ifstream& ifs) {
-  spdlog::debug("Parsing QM payload ({} bytes)", position_.payload_size);
+  LIB_DEBUG("Parsing QM payload ({} bytes)", position_.payload_size);
 
   // Read raw payload
   raw_payload_.resize(position_.payload_size);
   if (!ifs.read(reinterpret_cast<char*>(raw_payload_.data()), position_.payload_size)) {
-    spdlog::error("Failed to read QM payload");
+    LIB_ERROR("Failed to read QM payload");
     return false;
   }
 
   // TODO: Implement QM parsing
-  spdlog::warn("QM parsing not yet implemented");
+  LIB_WARN("QM parsing not yet implemented");
   return true;
 }
 

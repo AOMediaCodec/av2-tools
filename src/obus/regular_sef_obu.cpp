@@ -10,6 +10,7 @@
  */
 
 #include <spdlog/spdlog.h>
+#include <av2_obu/core/logging.h>
 
 #include <av2_obu/core/av2_sequence_header.h>
 #include <av2_obu/core/bitstream_reader.h>
@@ -18,25 +19,25 @@
 namespace av2_obu {
 
 bool RegularSEFOBU::parse_payload(std::ifstream& ifs) {
-  spdlog::debug("Parsing REGULAR_SEF payload ({} bytes)", position_.payload_size);
+  LIB_DEBUG("Parsing REGULAR_SEF payload ({} bytes)", position_.payload_size);
 
   raw_payload_.resize(position_.payload_size);
   if (!ifs.read(reinterpret_cast<char*>(raw_payload_.data()), position_.payload_size)) {
-    spdlog::error("Failed to read REGULAR_SEF payload");
+    LIB_ERROR("Failed to read REGULAR_SEF payload");
     return false;
   }
 
   if (active_seq_header_) {
     BitstreamReader br(raw_payload_);
     if (!frame_header_.parse_lightweight(br, OBUType::REGULAR_SEF, *active_seq_header_)) {
-      spdlog::error("Failed to parse REGULAR_SEF frame header");
+      LIB_ERROR("Failed to parse REGULAR_SEF frame header");
       return false;
     }
-    spdlog::debug("REGULAR_SEF: show_ref={}, order_hint={}, derive_sef_oh={}",
+    LIB_DEBUG("REGULAR_SEF: show_ref={}, order_hint={}, derive_sef_oh={}",
                   frame_header_.frame_to_show_map_idx, frame_header_.order_hint,
                   frame_header_.derive_sef_order_hint);
   } else {
-    spdlog::warn("REGULAR_SEF: no active sequence header — frame header not parsed");
+    LIB_WARN("REGULAR_SEF: no active sequence header — frame header not parsed");
   }
 
   return true;

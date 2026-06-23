@@ -10,6 +10,7 @@
  */
 
 #include <spdlog/spdlog.h>
+#include <av2_obu/core/logging.h>
 
 #include <cstring>
 #include <iomanip>
@@ -25,7 +26,7 @@ namespace av2_obu {
 bool OBUParser::parse_file(const std::string& filename) {
   std::ifstream ifs(filename, std::ios::binary);
   if (!ifs) {
-    spdlog::error("Failed to open file: {}", filename);
+    LIB_ERROR("Failed to open file: {}", filename);
     return false;
   }
 
@@ -34,7 +35,7 @@ bool OBUParser::parse_file(const std::string& filename) {
   std::streampos file_size = ifs.tellg();
   ifs.seekg(0, std::ios::beg);
 
-  spdlog::debug("Parsing AV2 file: {} ({} bytes)", filename, static_cast<long long>(file_size));
+  LIB_DEBUG("Parsing AV2 file: {} ({} bytes)", filename, static_cast<long long>(file_size));
 
   // Clear previous state
   obus_.clear();
@@ -44,13 +45,13 @@ bool OBUParser::parse_file(const std::string& filename) {
 
   // Scan the file
   if (!scan_file(ifs)) {
-    spdlog::error("Failed to parse file: {}", filename);
+    LIB_ERROR("Failed to parse file: {}", filename);
     return false;
   }
 
   build_temporal_units();
 
-  spdlog::debug("Successfully parsed {} OBUs, {} temporal units", obus_.size(),
+  LIB_DEBUG("Successfully parsed {} OBUs, {} temporal units", obus_.size(),
                 temporal_units_.size());
   return true;
 }
@@ -70,7 +71,7 @@ bool OBUParser::scan_file(std::ifstream& ifs) {
       break;
     }
 
-    spdlog::debug("--- OBU {} at position {} ---", obu_index, static_cast<long long>(record_begin));
+    LIB_DEBUG("--- OBU {} at position {} ---", obu_index, static_cast<long long>(record_begin));
 
     OBUPosition pos;
     pos.start_pos = record_begin;
@@ -79,7 +80,7 @@ bool OBUParser::scan_file(std::ifstream& ifs) {
     uint32_t total_size_val;
     uint32_t size_field_len = read_annex_b_size(ifs, total_size_val);
     if (size_field_len == 0) {
-      spdlog::error("Failed to read size field at position {}",
+      LIB_ERROR("Failed to read size field at position {}",
                     static_cast<long long>(record_begin));
       return false;
     }
@@ -91,7 +92,7 @@ bool OBUParser::scan_file(std::ifstream& ifs) {
     OBUHeader temp_header;
     std::streampos header_start = ifs.tellg();
     if (!temp_header.parse(ifs)) {
-      spdlog::error("Failed to parse header at position {}", static_cast<long long>(header_start));
+      LIB_ERROR("Failed to parse header at position {}", static_cast<long long>(header_start));
       return false;
     }
     pos.header_len = static_cast<uint32_t>(ifs.tellg() - header_start);
@@ -101,14 +102,14 @@ bool OBUParser::scan_file(std::ifstream& ifs) {
 
     // In AV2, the size field includes the header
     if (total_size_val < pos.header_len) {
-      spdlog::error("Total size ({}) is less than header length ({})", total_size_val,
+      LIB_ERROR("Total size ({}) is less than header length ({})", total_size_val,
                     pos.header_len);
       return false;
     }
     pos.payload_size = total_size_val - pos.header_len;
     pos.end_pos = pos.payload_pos + static_cast<std::streamoff>(pos.payload_size);
 
-    spdlog::debug("Position info: start={}, header={}, payload={}, end={}, payload_size={}",
+    LIB_DEBUG("Position info: start={}, header={}, payload={}, end={}, payload_size={}",
                   static_cast<long long>(pos.start_pos), static_cast<long long>(pos.header_pos),
                   static_cast<long long>(pos.payload_pos), static_cast<long long>(pos.end_pos),
                   pos.payload_size);
@@ -116,7 +117,7 @@ bool OBUParser::scan_file(std::ifstream& ifs) {
     // Create OBU object
     auto obu = BaseOBU::create(ifs, pos, parse_mode_, active_sequence_header_);
     if (!obu) {
-      spdlog::warn("Skipping OBU at position {} (parse failed)", static_cast<long long>(record_begin));
+      LIB_WARN("Skipping OBU at position {} (parse failed)", static_cast<long long>(record_begin));
       ifs.seekg(pos.end_pos);
       obu_index++;
       continue;
@@ -333,7 +334,7 @@ void OBUParser::build_temporal_units() {
     temporal_units_.push_back(std::move(current_tu));
   }
 
-  spdlog::debug("Built {} temporal units", temporal_units_.size());
+  LIB_DEBUG("Built {} temporal units", temporal_units_.size());
 }
 
 }  // namespace av2_obu

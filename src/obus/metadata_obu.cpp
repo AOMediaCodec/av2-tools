@@ -10,6 +10,7 @@
  */
 
 #include <spdlog/spdlog.h>
+#include <av2_obu/core/logging.h>
 
 #include <av2_obu/core/bitstream_reader.h>
 #include <av2_obu/obus/metadata_obu.h>
@@ -18,29 +19,29 @@ namespace av2_obu {
 
 bool MetadataOBU::parse_payload(std::ifstream& ifs) {
   if (position_.payload_size == 0) {
-    spdlog::warn("Metadata OBU has no payload");
+    LIB_WARN("Metadata OBU has no payload");
     return true;
   }
 
-  spdlog::debug("Parsing metadata OBU payload ({} bytes)", position_.payload_size);
+  LIB_DEBUG("Parsing metadata OBU payload ({} bytes)", position_.payload_size);
 
   try {
     BitstreamReader br(ifs, position_.payload_size);
 
     // Parse OBU-level field
     metadata_is_suffix_ = static_cast<uint8_t>(br.read_bits(1));
-    spdlog::debug("  metadata_is_suffix: {}", int(metadata_is_suffix_));
+    LIB_DEBUG("  metadata_is_suffix: {}", int(metadata_is_suffix_));
 
     // Parse short metadata unit header
     if (!metadata_unit_.parse_simple_header(br)) {
-      spdlog::warn("Failed to parse metadata unit header");
+      LIB_WARN("Failed to parse metadata unit header");
       return true;
     }
 
     // Parse metadata unit payload if not cancelled
     if (!metadata_unit_.is_cancelled()) {
       if (!metadata_unit_.parse_payload(br)) {
-        spdlog::warn("Failed to parse metadata unit payload");
+        LIB_WARN("Failed to parse metadata unit payload");
       }
     }
 
@@ -51,7 +52,7 @@ bool MetadataOBU::parse_payload(std::ifstream& ifs) {
     return true;
 
   } catch (const std::exception& e) {
-    spdlog::warn("Failed to parse metadata OBU ({}), continuing with next OBU", e.what());
+    LIB_WARN("Failed to parse metadata OBU ({}), continuing with next OBU", e.what());
     return true;
   }
 }

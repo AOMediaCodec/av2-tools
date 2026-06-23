@@ -10,6 +10,7 @@
  */
 
 #include <spdlog/spdlog.h>
+#include <av2_obu/core/logging.h>
 
 #include <av2_obu/core/bitstream_reader.h>
 #include <av2_obu/obus/sequence_header_obu.h>
@@ -18,17 +19,17 @@ namespace av2_obu {
 
 bool SequenceHeaderOBU::parse_payload(std::ifstream& ifs) {
   if (position_.payload_size == 0) {
-    spdlog::warn("Sequence header has no payload");
+    LIB_WARN("Sequence header has no payload");
     return false;
   }
 
-  spdlog::debug("Parsing AV2 sequence header payload ({} bytes)", position_.payload_size);
+  LIB_DEBUG("Parsing AV2 sequence header payload ({} bytes)", position_.payload_size);
 
   // Snapshot the raw payload bytes so callers (e.g. OBUParser::get_statistics) can
   // detect SH-byte changes across the stream by direct comparison.
   raw_payload_.resize(position_.payload_size);
   if (!ifs.read(reinterpret_cast<char*>(raw_payload_.data()), position_.payload_size)) {
-    spdlog::error("Failed to read sequence header payload");
+    LIB_ERROR("Failed to read sequence header payload");
     return false;
   }
 
@@ -37,7 +38,7 @@ bool SequenceHeaderOBU::parse_payload(std::ifstream& ifs) {
 
     // Parse using the full AV2 sequence header parser
     if (!seq_header_.parse(br)) {
-      spdlog::error("Failed to parse AV2 sequence header");
+      LIB_ERROR("Failed to parse AV2 sequence header");
       return false;
     }
 
@@ -45,11 +46,11 @@ bool SequenceHeaderOBU::parse_payload(std::ifstream& ifs) {
     if (!parse_obu_trailing_bits(br))
       return false;
 
-    spdlog::debug("Successfully parsed AV2 sequence header");
+    LIB_DEBUG("Successfully parsed AV2 sequence header");
     return true;
 
   } catch (const std::exception& e) {
-    spdlog::error("Exception while parsing sequence header: {}", e.what());
+    LIB_ERROR("Exception while parsing sequence header: {}", e.what());
     return false;
   }
 }

@@ -10,6 +10,7 @@
  */
 
 #include <spdlog/spdlog.h>
+#include <av2_obu/core/logging.h>
 
 #include <av2_obu/core/av2_sequence_header.h>
 #include <av2_obu/core/bitstream_reader.h>
@@ -18,12 +19,12 @@
 namespace av2_obu {
 
 bool CLKOBU::parse_payload(std::ifstream& ifs) {
-  spdlog::debug("Parsing CLK payload ({} bytes)", position_.payload_size);
+  LIB_DEBUG("Parsing CLK payload ({} bytes)", position_.payload_size);
 
   // Always read raw payload for potential passthrough
   raw_payload_.resize(position_.payload_size);
   if (!ifs.read(reinterpret_cast<char*>(raw_payload_.data()), position_.payload_size)) {
-    spdlog::error("Failed to read CLK payload");
+    LIB_ERROR("Failed to read CLK payload");
     return false;
   }
 
@@ -31,10 +32,10 @@ bool CLKOBU::parse_payload(std::ifstream& ifs) {
   if (active_seq_header_) {
     BitstreamReader br(raw_payload_);
     if (!tile_group_header_.parse_lightweight(br, OBUType::CLK, *active_seq_header_)) {
-      spdlog::error("Failed to parse CLK tile group header");
+      LIB_ERROR("Failed to parse CLK tile group header");
       return false;
     }
-    spdlog::debug("CLK: order_hint={}, refresh_flags=0x{:02x}, {}x{}",
+    LIB_DEBUG("CLK: order_hint={}, refresh_flags=0x{:02x}, {}x{}",
                   tile_group_header_.frame_header.order_hint,
                   tile_group_header_.frame_header.refresh_frame_flags,
                   tile_group_header_.frame_header.FrameWidth,
@@ -46,7 +47,7 @@ bool CLKOBU::parse_payload(std::ifstream& ifs) {
       tile_group_header_.parse_deep(br, OBUType::CLK, *active_seq_header_);
     }
   } else {
-    spdlog::warn("CLK: no active sequence header — frame header not parsed");
+    LIB_WARN("CLK: no active sequence header — frame header not parsed");
   }
 
   return true;

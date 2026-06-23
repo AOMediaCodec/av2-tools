@@ -10,6 +10,7 @@
  */
 
 #include <spdlog/spdlog.h>
+#include <av2_obu/core/logging.h>
 
 #include <av2_obu/core/bitstream_reader.h>
 #include <av2_obu/obus/atlas_segment_obu.h>
@@ -88,11 +89,11 @@ static void parse_label_segment_info(BitstreamReader& br, AtlasSegmentOBU::Label
 }  // namespace
 
 bool AtlasSegmentOBU::parse_payload(std::ifstream& ifs) {
-  spdlog::debug("Parsing ATLAS_SEGMENT payload ({} bytes)", position_.payload_size);
+  LIB_DEBUG("Parsing ATLAS_SEGMENT payload ({} bytes)", position_.payload_size);
 
   raw_payload_.resize(position_.payload_size);
   if (!ifs.read(reinterpret_cast<char*>(raw_payload_.data()), position_.payload_size)) {
-    spdlog::error("Failed to read ATLAS_SEGMENT payload");
+    LIB_ERROR("Failed to read ATLAS_SEGMENT payload");
     return false;
   }
 
@@ -161,7 +162,7 @@ bool AtlasSegmentOBU::parse_payload(std::ifstream& ifs) {
         break;
       }
       default:
-        spdlog::warn("ATLAS_SEGMENT: unknown mode_idc={}", static_cast<uint32_t>(mode_idc_));
+        LIB_WARN("ATLAS_SEGMENT: unknown mode_idc={}", static_cast<uint32_t>(mode_idc_));
         return false;
     }
 
@@ -171,11 +172,11 @@ bool AtlasSegmentOBU::parse_payload(std::ifstream& ifs) {
       return false;
 
   } catch (const std::runtime_error& e) {
-    spdlog::error("ATLAS_SEGMENT parse error: {}", e.what());
+    LIB_ERROR("ATLAS_SEGMENT parse error: {}", e.what());
     return false;
   }
 
-  spdlog::debug("ATLAS_SEGMENT: id={}, mode={}", atlas_segment_id_, mode_name(mode_idc_));
+  LIB_DEBUG("ATLAS_SEGMENT: id={}, mode={}", atlas_segment_id_, mode_name(mode_idc_));
   return true;
 }
 

@@ -10,6 +10,7 @@
  */
 
 #include <spdlog/spdlog.h>
+#include <av2_obu/core/logging.h>
 
 #include <av2_obu/obus/temporal_delimiter_obu.h>
 
@@ -17,7 +18,7 @@ namespace av2_obu {
 
 bool TemporalDelimiterOBU::parse_payload(std::ifstream& ifs) {
   // Temporal delimiter has no payload
-  spdlog::debug("Temporal delimiter (no payload)");
+  LIB_DEBUG("Temporal delimiter (no payload)");
   return skip_payload(ifs);
 }
 

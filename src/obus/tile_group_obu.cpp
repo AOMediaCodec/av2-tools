@@ -10,13 +10,14 @@
  */
 
 #include <spdlog/spdlog.h>
+#include <av2_obu/core/logging.h>
 
 #include <av2_obu/obus/tile_group_obu.h>
 
 namespace av2_obu {
 
 bool TileGroupOBU::parse_payload(std::ifstream& ifs) {
-  spdlog::debug("Skipping tile group payload ({} bytes)", position_.payload_size);
+  LIB_DEBUG("Skipping tile group payload ({} bytes)", position_.payload_size);
   // For now, skip tile data (too large and complex)
   return skip_payload(ifs);
 }

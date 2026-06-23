@@ -10,13 +10,14 @@
  */
 
 #include <spdlog/spdlog.h>
+#include <av2_obu/core/logging.h>
 
 #include <av2_obu/obus/padding_obu.h>
 
 namespace av2_obu {
 
 bool PaddingOBU::parse_payload(std::ifstream& ifs) {
-  spdlog::debug("Skipping padding payload ({} bytes)", position_.payload_size);
+  LIB_DEBUG("Skipping padding payload ({} bytes)", position_.payload_size);
   return skip_payload(ifs);
 }
 

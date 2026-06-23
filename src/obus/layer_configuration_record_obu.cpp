@@ -10,6 +10,7 @@
  */
 
 #include <spdlog/spdlog.h>
+#include <av2_obu/core/logging.h>
 
 #include <av2_obu/core/bitstream_reader.h>
 #include <av2_obu/obus/layer_configuration_record_obu.h>
@@ -134,11 +135,11 @@ static LCROBU::XLayerInfo parse_xlayer_info(BitstreamReader& br, bool is_global,
 }
 
 bool LayerConfigurationRecordOBU::parse_payload(std::ifstream& ifs) {
-  spdlog::debug("Parsing LAYER_CONFIGURATION_RECORD payload ({} bytes)", position_.payload_size);
+  LIB_DEBUG("Parsing LAYER_CONFIGURATION_RECORD payload ({} bytes)", position_.payload_size);
 
   raw_payload_.resize(position_.payload_size);
   if (!ifs.read(reinterpret_cast<char*>(raw_payload_.data()), position_.payload_size)) {
-    spdlog::error("Failed to read LAYER_CONFIGURATION_RECORD payload");
+    LIB_ERROR("Failed to read LAYER_CONFIGURATION_RECORD payload");
     return false;
   }
 
@@ -209,7 +210,7 @@ bool LayerConfigurationRecordOBU::parse_payload(std::ifstream& ifs) {
             }
             gp.xlayer_info = parse_xlayer_info(sub_br, true, lcr_global_atlas_id_present_flag_);
           } catch (const std::exception& e) {
-            spdlog::warn("LCR: failed to parse xlayer {} payload: {}", gp.xlayer_id, e.what());
+            LIB_WARN("LCR: failed to parse xlayer {} payload: {}", gp.xlayer_id, e.what());
           }
         }
 
@@ -243,7 +244,7 @@ bool LayerConfigurationRecordOBU::parse_payload(std::ifstream& ifs) {
   if (!parse_obu_trailing_bits(br))
     return false;
 
-  spdlog::debug("LCR: {} mode, xlayer_map=0x{:08x}, {} xlayers", is_global_ ? "global" : "local",
+  LIB_DEBUG("LCR: {} mode, xlayer_map=0x{:08x}, {} xlayers", is_global_ ? "global" : "local",
                 lcr_xlayer_map_, xlayer_ids_.size());
   return true;
 }

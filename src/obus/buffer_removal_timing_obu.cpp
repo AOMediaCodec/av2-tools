@@ -10,6 +10,7 @@
  */
 
 #include <spdlog/spdlog.h>
+#include <av2_obu/core/logging.h>
 
 #include <av2_obu/core/bitstream_reader.h>
 #include <av2_obu/obus/buffer_removal_timing_obu.h>
@@ -17,11 +18,11 @@
 namespace av2_obu {
 
 bool BufferRemovalTimingOBU::parse_payload(std::ifstream& ifs) {
-  spdlog::debug("Parsing BUFFER_REMOVAL_TIMING payload ({} bytes)", position_.payload_size);
+  LIB_DEBUG("Parsing BUFFER_REMOVAL_TIMING payload ({} bytes)", position_.payload_size);
 
   raw_payload_.resize(position_.payload_size);
   if (!ifs.read(reinterpret_cast<char*>(raw_payload_.data()), position_.payload_size)) {
-    spdlog::error("Failed to read BUFFER_REMOVAL_TIMING payload");
+    LIB_ERROR("Failed to read BUFFER_REMOVAL_TIMING payload");
     return false;
   }
 
@@ -49,7 +50,7 @@ bool BufferRemovalTimingOBU::parse_payload(std::ifstream& ifs) {
   if (!parse_obu_trailing_bits(br))
     return false;
 
-  spdlog::debug("BRT: ops_dependent={}, br_time={}", br_ops_dependent_flag_, br_time_);
+  LIB_DEBUG("BRT: ops_dependent={}, br_time={}", br_ops_dependent_flag_, br_time_);
   return true;
 }
 

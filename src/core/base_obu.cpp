@@ -10,6 +10,7 @@
  */
 
 #include <spdlog/spdlog.h>
+#include <av2_obu/core/logging.h>
 
 #include <iomanip>
 
@@ -62,7 +63,7 @@ json OBUPosition::to_json() const {
 bool OBUHeader::parse(std::ifstream& ifs) {
   char byte1;
   if (!ifs.read(&byte1, 1)) {
-    spdlog::error("Failed to read OBU header byte");
+    LIB_ERROR("Failed to read OBU header byte");
     return false;
   }
 
@@ -72,23 +73,23 @@ bool OBUHeader::parse(std::ifstream& ifs) {
   obu_type_ = (byte1 >> 2) & 0x1F;
   obu_tlayer_id_ = byte1 & 0x3;
 
-  spdlog::debug("OBU header: type={}, tlayer={}, ext={}", obu_type_, obu_tlayer_id_,
+  LIB_DEBUG("OBU header: type={}, tlayer={}, ext={}", obu_type_, obu_tlayer_id_,
                 obu_extension_flag_);
 
   if (obu_extension_flag_) {
     char byte2;
     if (!ifs.read(&byte2, 1)) {
-      spdlog::error("Failed to read OBU extension byte");
+      LIB_ERROR("Failed to read OBU extension byte");
       return false;
     }
     // byte 2: [mlayer_id(3) | xlayer_id(5)]
     obu_mlayer_id_ = (byte2 >> 5) & 0x07;
     obu_xlayer_id_ = byte2 & 0x1F;
-    spdlog::debug("  Extension: mlayer={}, xlayer={}", obu_mlayer_id_, obu_xlayer_id_);
+    LIB_DEBUG("  Extension: mlayer={}, xlayer={}", obu_mlayer_id_, obu_xlayer_id_);
   }
 
   if (!is_valid_obu_type(obu_type_)) {
-    spdlog::warn("Unknown OBU type: {}", obu_type_);
+    LIB_WARN("Unknown OBU type: {}", obu_type_);
   }
 
   return ifs.good();
@@ -106,7 +107,7 @@ json OBUHeader::to_json() const {
 
 std::unique_ptr<BaseOBU> BaseOBU::create(std::ifstream& ifs, const OBUPosition& pos, ParseMode mode,
                                          const AV2SequenceHeader* seq_header) {
-  spdlog::debug("Creating OBU at position {}", static_cast<long long>(pos.start_pos));
+  LIB_DEBUG("Creating OBU at position {}", static_cast<long long>(pos.start_pos));
 
   std::unique_ptr<BaseOBU> obu;
 
@@ -114,7 +115,7 @@ std::unique_ptr<BaseOBU> BaseOBU::create(std::ifstream& ifs, const OBUPosition& 
   OBUHeader temp_header;
   ifs.seekg(pos.header_pos);
   if (!temp_header.parse(ifs)) {
-    spdlog::error("Failed to parse OBU header at position {}",
+    LIB_ERROR("Failed to parse OBU header at position {}",
                   static_cast<long long>(pos.header_pos));
     return nullptr;
   }
@@ -199,7 +200,7 @@ std::unique_ptr<BaseOBU> BaseOBU::create(std::ifstream& ifs, const OBUPosition& 
       obu = std::make_unique<PaddingOBU>(pos);
       break;
     default:
-      spdlog::warn("Creating UnknownOBU for type {}", to_string(type));
+      LIB_WARN("Creating UnknownOBU for type {}", to_string(type));
       obu = std::make_unique<UnknownOBU>(pos);
       break;
   }
@@ -210,14 +211,14 @@ std::unique_ptr<BaseOBU> BaseOBU::create(std::ifstream& ifs, const OBUPosition& 
   ifs.seekg(pos.header_pos);
   try {
     if (!obu->parse(ifs)) {
-      spdlog::error("Failed to parse {} at position {}", to_string(type),
+      LIB_ERROR("Failed to parse {} at position {}", to_string(type),
                     static_cast<long long>(pos.header_pos));
       // Seek to end of OBU so parsing can continue with the next OBU
       ifs.seekg(pos.end_pos);
       return nullptr;
     }
   } catch (const std::exception& e) {
-    spdlog::error("Exception parsing {} at position {}: {}", to_string(type),
+    LIB_ERROR("Exception parsing {} at position {}: {}", to_string(type),
                   static_cast<long long>(pos.header_pos), e.what());
     // Seek to end of OBU so parsing can continue with the next OBU
     ifs.seekg(pos.end_pos);
@@ -238,12 +239,12 @@ bool BaseOBU::parse(std::ifstream& ifs) {
 
   // Parse payload (implemented by derived classes)
   if (!parse_payload(ifs)) {
-    spdlog::error("Failed to parse payload for {}", type_name());
+    LIB_ERROR("Failed to parse payload for {}", type_name());
     return false;
   }
 
   parsed_ = true;
-  spdlog::debug("Successfully parsed {} (size={})", type_name(), position_.payload_size);
+  LIB_DEBUG("Successfully parsed {} (size={})", type_name(), position_.payload_size);
   return true;
 }
 
@@ -270,13 +271,13 @@ bool BaseOBU::skip_payload(std::ifstream& ifs) {
 bool BaseOBU::parse_obu_trailing_bits(BitstreamReader& br) {
   size_t remainingPayloadBits = br.bits_remaining();
   if (remainingPayloadBits == 0) {
-    spdlog::warn("{}: no remaining bits for trailing_bits()", type_name());
+    LIB_WARN("{}: no remaining bits for trailing_bits()", type_name());
     return false;
   }
 
   if (is_extensible_obu(type())) {
     obu_extension_flag_ = br.read_bit();
-    spdlog::debug("{}: obu_extension_flag = {}, remaining = {} bits", type_name(),
+    LIB_DEBUG("{}: obu_extension_flag = {}, remaining = {} bits", type_name(),
                   obu_extension_flag_, remainingPayloadBits - 1);
 
     if (obu_extension_flag_) {
@@ -287,13 +288,13 @@ bool BaseOBU::parse_obu_trailing_bits(BitstreamReader& br) {
     } else {
       size_t trailingBits = remainingPayloadBits - 1;
       if (trailingBits > 0 && !br.read_trailing_bits(trailingBits)) {
-        spdlog::warn("{}: invalid trailing bits ({} bits)", type_name(), trailingBits);
+        LIB_WARN("{}: invalid trailing bits ({} bits)", type_name(), trailingBits);
         return false;
       }
     }
   } else {
     if (!br.read_trailing_bits(remainingPayloadBits)) {
-      spdlog::warn("{}: invalid trailing bits ({} bits)", type_name(), remainingPayloadBits);
+      LIB_WARN("{}: invalid trailing bits ({} bits)", type_name(), remainingPayloadBits);
       return false;
     }
   }

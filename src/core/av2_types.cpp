@@ -12,27 +12,31 @@
 #include <algorithm>
 #include <cctype>
 
+#include <spdlog/sinks/stdout_color_sinks.h>
+
 #include <av2_obu/core/av2_types.h>
+#include <av2_obu/core/logging.h>
 
 namespace av2_obu {
 
-// ========== LOGGING CONTROL ==========
+// ========== LOGGING ==========
 
-void set_log_level(spdlog::level::level_enum level) {
-  spdlog::set_level(level);
+spdlog::logger& log() {
+  static const std::shared_ptr<spdlog::logger> kLogger = []() {
+    auto existing = spdlog::get("av2_obu");
+    if (existing) return existing;
+    auto sink = std::make_shared<spdlog::sinks::stderr_color_sink_mt>();
+    auto l = std::make_shared<spdlog::logger>("av2_obu", sink);
+    l->set_level(spdlog::level::warn);
+    spdlog::register_logger(l);
+    return l;
+  }();
+  return *kLogger;
 }
 
-spdlog::level::level_enum get_log_level() {
-  return spdlog::get_level();
-}
+void set_log_level(spdlog::level::level_enum level) { log().set_level(level); }
 
-// Initialize library with default log level (warn)
-namespace {
-struct LogInit {
-  LogInit() { spdlog::set_level(spdlog::level::warn); }
-};
-static LogInit log_init;
-}  // namespace
+spdlog::level::level_enum get_log_level() { return log().level(); }
 
 // ========== TYPE MAPPINGS ==========
 
