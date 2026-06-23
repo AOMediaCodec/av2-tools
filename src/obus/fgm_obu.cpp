@@ -10,23 +10,24 @@
  */
 
 #include <spdlog/spdlog.h>
+#include <av2_obu/core/logging.h>
 
 #include <av2_obu/obus/fgm_obu.h>
 
 namespace av2_obu {
 
 bool FGMOBU::parse_payload(std::ifstream& ifs) {
-  spdlog::debug("Parsing FGM payload ({} bytes)", position_.payload_size);
+  LIB_DEBUG("Parsing FGM payload ({} bytes)", position_.payload_size);
 
   // Read raw payload
   raw_payload_.resize(position_.payload_size);
   if (!ifs.read(reinterpret_cast<char*>(raw_payload_.data()), position_.payload_size)) {
-    spdlog::error("Failed to read FGM payload");
+    LIB_ERROR("Failed to read FGM payload");
     return false;
   }
 
   // TODO: Implement FGM parsing
-  spdlog::warn("FGM parsing not yet implemented");
+  LIB_WARN("FGM parsing not yet implemented");
   return true;
 }
 

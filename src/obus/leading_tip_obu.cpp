@@ -10,6 +10,7 @@
  */
 
 #include <spdlog/spdlog.h>
+#include <av2_obu/core/logging.h>
 
 #include <av2_obu/core/av2_sequence_header.h>
 #include <av2_obu/core/bitstream_reader.h>
@@ -18,25 +19,25 @@
 namespace av2_obu {
 
 bool LeadingTIPOBU::parse_payload(std::ifstream& ifs) {
-  spdlog::debug("Parsing LEADING_TIP payload ({} bytes)", position_.payload_size);
+  LIB_DEBUG("Parsing LEADING_TIP payload ({} bytes)", position_.payload_size);
 
   raw_payload_.resize(position_.payload_size);
   if (!ifs.read(reinterpret_cast<char*>(raw_payload_.data()), position_.payload_size)) {
-    spdlog::error("Failed to read LEADING_TIP payload");
+    LIB_ERROR("Failed to read LEADING_TIP payload");
     return false;
   }
 
   if (active_seq_header_) {
     BitstreamReader br(raw_payload_);
     if (!frame_header_.parse_lightweight(br, OBUType::LEADING_TIP, *active_seq_header_)) {
-      spdlog::error("Failed to parse LEADING_TIP frame header");
+      LIB_ERROR("Failed to parse LEADING_TIP frame header");
       return false;
     }
-    spdlog::debug("LEADING_TIP: order_hint={}, refresh_flags=0x{:02x}, immediate={}",
+    LIB_DEBUG("LEADING_TIP: order_hint={}, refresh_flags=0x{:02x}, immediate={}",
                   frame_header_.order_hint, frame_header_.refresh_frame_flags,
                   frame_header_.immediate_output_frame);
   } else {
-    spdlog::warn("LEADING_TIP: no active sequence header — frame header not parsed");
+    LIB_WARN("LEADING_TIP: no active sequence header — frame header not parsed");
   }
 
   return true;

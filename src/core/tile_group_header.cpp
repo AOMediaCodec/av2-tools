@@ -10,6 +10,7 @@
  */
 
 #include <spdlog/spdlog.h>
+#include <av2_obu/core/logging.h>
 
 #include <av2_obu/core/av2_sequence_header.h>
 #include <av2_obu/core/bitstream_reader.h>
@@ -31,7 +32,7 @@ bool TileGroupHeader::parse_lightweight(BitstreamReader& br, OBUType obu_type,
   // Parse frame header if present
   if (frame_header_present_flag) {
     if (!frame_header.parse_lightweight(br, obu_type, sh)) {
-      spdlog::error("Failed to parse frame header in tile group");
+      LIB_ERROR("Failed to parse frame header in tile group");
       return false;
     }
   }
@@ -49,7 +50,7 @@ bool TileGroupHeader::parse_deep(BitstreamReader& /*br*/, OBUType /*obu_type*/,
   //       deep frame header parse to know TileCols, TileRows, etc.
   // TODO: Parse bru_tile_active flags
   // TODO: Parse tile_group_payload (per-tile arithmetic-coded block data)
-  spdlog::debug("Deep tile group parsing not yet implemented");
+  LIB_DEBUG("Deep tile group parsing not yet implemented");
   return true;
 }
 

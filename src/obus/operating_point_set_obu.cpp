@@ -10,6 +10,7 @@
  */
 
 #include <spdlog/spdlog.h>
+#include <av2_obu/core/logging.h>
 
 #include <av2_obu/core/bitstream_reader.h>
 #include <av2_obu/obus/operating_point_set_obu.h>
@@ -77,11 +78,11 @@ static OPS::MlayerEntry parse_mlayer_info(BitstreamReader& br, uint32_t xlayer_i
 }
 
 bool OperatingPointSetOBU::parse_payload(std::ifstream& ifs) {
-  spdlog::debug("Parsing OPERATING_POINT_SET payload ({} bytes)", position_.payload_size);
+  LIB_DEBUG("Parsing OPERATING_POINT_SET payload ({} bytes)", position_.payload_size);
 
   raw_payload_.resize(position_.payload_size);
   if (!ifs.read(reinterpret_cast<char*>(raw_payload_.data()), position_.payload_size)) {
-    spdlog::error("Failed to read OPERATING_POINT_SET payload");
+    LIB_ERROR("Failed to read OPERATING_POINT_SET payload");
     return false;
   }
 
@@ -183,7 +184,7 @@ bool OperatingPointSetOBU::parse_payload(std::ifstream& ifs) {
       // Advance to exact end of this OP payload using data_size
       size_t end_pos = start_pos + static_cast<size_t>(op.ops_data_size) * 8;
       if (br.bits_read() != end_pos) {
-        spdlog::debug("OPS: OP {} consumed {} bits, data_size={} bytes ({} bits)", i,
+        LIB_DEBUG("OPS: OP {} consumed {} bits, data_size={} bytes ({} bits)", i,
                       br.bits_read() - start_pos, op.ops_data_size, end_pos - start_pos);
         br.set_bit_pos(end_pos);
       }
@@ -194,7 +195,7 @@ bool OperatingPointSetOBU::parse_payload(std::ifstream& ifs) {
   if (!parse_obu_trailing_bits(br))
     return false;
 
-  spdlog::debug("OPS: id={}, cnt={}, intent={}, reset={}", ops_id_, ops_cnt_, ops_intent_,
+  LIB_DEBUG("OPS: id={}, cnt={}, intent={}, reset={}", ops_id_, ops_cnt_, ops_intent_,
                 ops_reset_flag_);
   return true;
 }

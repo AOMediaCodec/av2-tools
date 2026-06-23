@@ -10,19 +10,20 @@
  */
 
 #include <spdlog/spdlog.h>
+#include <av2_obu/core/logging.h>
 
 #include <av2_obu/obus/unknown_obu.h>
 
 namespace av2_obu {
 
 bool UnknownOBU::parse_payload(std::ifstream& ifs) {
-  spdlog::warn("Unknown OBU type {}, storing raw bytes ({} bytes)", header_.get_obu_type_raw(),
+  LIB_WARN("Unknown OBU type {}, storing raw bytes ({} bytes)", header_.get_obu_type_raw(),
                position_.payload_size);
 
   if (position_.payload_size > 0) {
     raw_payload_.resize(position_.payload_size);
     if (!ifs.read(reinterpret_cast<char*>(raw_payload_.data()), position_.payload_size)) {
-      spdlog::error("Failed to read unknown OBU payload");
+      LIB_ERROR("Failed to read unknown OBU payload");
       return false;
     }
   }

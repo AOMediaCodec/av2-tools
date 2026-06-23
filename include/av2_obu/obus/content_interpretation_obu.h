@@ -34,9 +34,15 @@ public:
   // Getters for parsed fields
   uint32_t get_scan_type_idc() const { return scan_type_idc_; }
   bool has_color_description() const { return color_description_present_flag_ != 0; }
+  uint32_t color_description_idc() const { return color_description_idc_; }
+  uint32_t color_primaries() const { return color_primaries_; }
+  uint32_t transfer_characteristics() const { return transfer_characteristics_; }
+  uint32_t matrix_coefficients() const { return matrix_coefficients_; }
+  uint32_t full_range_flag() const { return full_range_flag_; }
   bool has_chroma_sample_position() const { return chroma_sample_position_present_flag_ != 0; }
   bool has_aspect_ratio_info() const { return aspect_ratio_info_present_flag_ != 0; }
   bool has_timing_info() const { return timing_info_present_flag_ != 0; }
+  const TimingInfo& get_timing_info() const { return timing_info_; }
 
 protected:
   bool parse_payload(std::ifstream& ifs) override;

@@ -10,6 +10,7 @@
  */
 
 #include <spdlog/spdlog.h>
+#include <av2_obu/core/logging.h>
 
 #include <algorithm>
 
@@ -21,7 +22,7 @@ namespace av2_obu {
 // ==================== TimingInfo ====================
 
 bool TimingInfo::parse(BitstreamReader& br) {
-  spdlog::debug("Parsing timing_info");
+  LIB_DEBUG("Parsing timing_info");
 
   num_units_in_display_tick = br.read_bits(32);
   time_scale = br.read_bits(32);
@@ -31,8 +32,8 @@ bool TimingInfo::parse(BitstreamReader& br) {
     num_ticks_per_picture_minus_1 = br.read_uvlc();
   }
 
-  spdlog::debug("  num_units_in_display_tick = {}", num_units_in_display_tick);
-  spdlog::debug("  time_scale = {}", time_scale);
+  LIB_DEBUG("  num_units_in_display_tick = {}", num_units_in_display_tick);
+  LIB_DEBUG("  time_scale = {}", time_scale);
 
   return true;
 }
@@ -50,15 +51,15 @@ json TimingInfo::to_json() const {
 // ==================== SeqDecoderModelInfo ====================
 
 bool SeqDecoderModelInfo::parse(BitstreamReader& br) {
-  spdlog::debug("Parsing seq_decoder_model_info");
+  LIB_DEBUG("Parsing seq_decoder_model_info");
 
   decoder_buffer_delay = br.read_uvlc();
   encoder_buffer_delay = br.read_uvlc();
   low_delay_mode_flag = br.read_bit();
 
-  spdlog::debug("  decoder_buffer_delay = {}", decoder_buffer_delay);
-  spdlog::debug("  encoder_buffer_delay = {}", encoder_buffer_delay);
-  spdlog::debug("  low_delay_mode_flag = {}", low_delay_mode_flag);
+  LIB_DEBUG("  decoder_buffer_delay = {}", decoder_buffer_delay);
+  LIB_DEBUG("  encoder_buffer_delay = {}", encoder_buffer_delay);
+  LIB_DEBUG("  low_delay_mode_flag = {}", low_delay_mode_flag);
 
   return true;
 }
@@ -73,7 +74,7 @@ json SeqDecoderModelInfo::to_json() const {
 
 bool SequencePartitionConfig::parse(BitstreamReader& br, bool single_picture_header_flag,
                                     bool Monochrome) {
-  spdlog::debug("Parsing sequence_partition_config");
+  LIB_DEBUG("Parsing sequence_partition_config");
 
   use_256x256_superblock = br.read_bit();
   if (!use_256x256_superblock) {
@@ -109,8 +110,8 @@ bool SequencePartitionConfig::parse(BitstreamReader& br, bool single_picture_hea
     MaxPbAspectRatio = 8;
   }
 
-  spdlog::debug("  use_256x256_superblock = {}", use_256x256_superblock);
-  spdlog::debug("  use_128x128_superblock = {}", use_128x128_superblock);
+  LIB_DEBUG("  use_256x256_superblock = {}", use_256x256_superblock);
+  LIB_DEBUG("  use_128x128_superblock = {}", use_128x128_superblock);
 
   return true;
 }
@@ -151,7 +152,7 @@ static void parse_seg_info(BitstreamReader& br, uint32_t numSegments) {
 // ==================== SequenceSegmentConfig ====================
 
 bool SequenceSegmentConfig::parse(BitstreamReader& br) {
-  spdlog::debug("Parsing sequence_segment_config");
+  LIB_DEBUG("Parsing sequence_segment_config");
 
   enable_ext_seg = br.read_bit();
   MaxSegments = enable_ext_seg ? 16 : 8;
@@ -162,7 +163,7 @@ bool SequenceSegmentConfig::parse(BitstreamReader& br) {
     parse_seg_info(br, MaxSegments);
   }
 
-  spdlog::debug("  enable_ext_seg = {}, MaxSegments = {}", enable_ext_seg, MaxSegments);
+  LIB_DEBUG("  enable_ext_seg = {}, MaxSegments = {}", enable_ext_seg, MaxSegments);
 
   return true;
 }
@@ -177,7 +178,7 @@ json SequenceSegmentConfig::to_json() const {
 // ==================== SequenceIntraConfig ====================
 
 bool SequenceIntraConfig::parse(BitstreamReader& br, bool Monochrome) {
-  spdlog::debug("Parsing sequence_intra_config");
+  LIB_DEBUG("Parsing sequence_intra_config");
 
   enable_dip = br.read_bit();
   enable_intra_edge_filter = br.read_bit();
@@ -209,7 +210,7 @@ json SequenceIntraConfig::to_json() const {
 // ==================== SequenceInterConfig ====================
 
 bool SequenceInterConfig::parse(BitstreamReader& br, bool single_picture_header_flag) {
-  spdlog::debug("Parsing sequence_inter_config (single_picture_header={})",
+  LIB_DEBUG("Parsing sequence_inter_config (single_picture_header={})",
                 single_picture_header_flag);
 
   seq_enabled_motion_modes.resize(MOTION_MODES, 0);
@@ -353,7 +354,7 @@ bool SequenceInterConfig::parse(BitstreamReader& br, bool single_picture_header_
     enable_short_refresh_frame_flags = br.read_bit();
   }
 
-  spdlog::debug("  NumRefFrames = {}, OrderHintBits = {}", NumRefFrames, OrderHintBits);
+  LIB_DEBUG("  NumRefFrames = {}, OrderHintBits = {}", NumRefFrames, OrderHintBits);
 
   return true;
 }
@@ -402,7 +403,7 @@ json SequenceInterConfig::to_json() const {
 // ==================== SequenceSCCConfig ====================
 
 bool SequenceSCCConfig::parse(BitstreamReader& br, bool single_picture_header_flag) {
-  spdlog::debug("Parsing sequence_scc_config");
+  LIB_DEBUG("Parsing sequence_scc_config");
 
   if (single_picture_header_flag) {
     seq_force_screen_content_tools = SELECT_SCREEN_CONTENT_TOOLS;
@@ -427,8 +428,8 @@ bool SequenceSCCConfig::parse(BitstreamReader& br, bool single_picture_header_fl
     }
   }
 
-  spdlog::debug("  seq_force_screen_content_tools = {}", seq_force_screen_content_tools);
-  spdlog::debug("  seq_force_integer_mv = {}", seq_force_integer_mv);
+  LIB_DEBUG("  seq_force_screen_content_tools = {}", seq_force_screen_content_tools);
+  LIB_DEBUG("  seq_force_integer_mv = {}", seq_force_integer_mv);
 
   return true;
 }
@@ -444,7 +445,7 @@ json SequenceSCCConfig::to_json() const {
 
 bool SequenceTransformQuantEntropyConfig::parse(BitstreamReader& br,
                                                 bool single_picture_header_flag, bool Monochrome) {
-  spdlog::debug("Parsing sequence_transform_quant_entropy_config");
+  LIB_DEBUG("Parsing sequence_transform_quant_entropy_config");
 
   enable_fsc = br.read_bit();
 
@@ -568,7 +569,7 @@ json SequenceTransformQuantEntropyConfig::to_json() const {
 
 bool SequenceFilterConfig::parse(BitstreamReader& br, bool single_picture_header_flag,
                                  bool /* Monochrome */, BlockSize seq_sb_size) {
-  spdlog::debug("Parsing sequence_filter_config");
+  LIB_DEBUG("Parsing sequence_filter_config");
 
   disable_loopfilters_across_tiles = br.read_bit();
   enable_cdef = br.read_bit();
@@ -743,7 +744,7 @@ static void parse_tile_params(BitstreamReader& br, uint32_t frameWidth, uint32_t
 bool SequenceTileConfig::parse(BitstreamReader& br, uint32_t frameWidth, uint32_t frameHeight,
                                bool use_256x256_superblock, bool use_128x128_superblock,
                                uint32_t seq_level_idx, uint32_t seq_tier) {
-  spdlog::debug("Parsing sequence_tile_config");
+  LIB_DEBUG("Parsing sequence_tile_config");
 
   seq_tile_info_present_flag = br.read_bit();
   if (seq_tile_info_present_flag) {
@@ -796,7 +797,7 @@ void AV2SequenceHeader::set_chroma_format_and_bit_depth() {
 // ==================== AV2SequenceHeader (Main) ====================
 
 bool AV2SequenceHeader::parse(BitstreamReader& br) {
-  spdlog::debug("Parsing AV2 Sequence Header");
+  LIB_DEBUG("Parsing AV2 Sequence Header");
 
   seq_header_id = br.read_uvlc();
   seq_profile_idc = br.read_bits(5);
@@ -813,10 +814,10 @@ bool AV2SequenceHeader::parse(BitstreamReader& br) {
   bit_depth_idc = br.read_uvlc();
   set_chroma_format_and_bit_depth();
 
-  spdlog::debug("  seq_header_id = {}", seq_header_id);
-  spdlog::debug("  seq_profile_idc = {}", seq_profile_idc);
-  spdlog::debug("  single_picture_header_flag = {}", single_picture_header_flag);
-  spdlog::debug("  chroma_format_idc = {}, bit_depth_idc = {}, BitDepth = {}", chroma_format_idc,
+  LIB_DEBUG("  seq_header_id = {}", seq_header_id);
+  LIB_DEBUG("  seq_profile_idc = {}", seq_profile_idc);
+  LIB_DEBUG("  single_picture_header_flag = {}", single_picture_header_flag);
+  LIB_DEBUG("  chroma_format_idc = {}, bit_depth_idc = {}, BitDepth = {}", chroma_format_idc,
                 bit_depth_idc, BitDepth);
 
   if (single_picture_header_flag) {
@@ -860,8 +861,8 @@ bool AV2SequenceHeader::parse(BitstreamReader& br) {
   n = frame_height_bits_minus_1 + 1;
   max_frame_height_minus_1 = br.read_bits(n);
 
-  spdlog::debug("  max_frame_width = {}", max_frame_width_minus_1 + 1);
-  spdlog::debug("  max_frame_height = {}", max_frame_height_minus_1 + 1);
+  LIB_DEBUG("  max_frame_width = {}", max_frame_width_minus_1 + 1);
+  LIB_DEBUG("  max_frame_height = {}", max_frame_height_minus_1 + 1);
 
   // Cropping window
   seq_cropping_window_present_flag = br.read_bit();
@@ -993,7 +994,7 @@ bool AV2SequenceHeader::parse(BitstreamReader& br) {
   // It belongs to obu_payload() and is parsed by BaseOBU::parse_obu_trailing_bits().
   // We should fix this: https://github.com/AOMediaCodec/av2-spec-internal/issues/488
 
-  spdlog::debug("Successfully parsed AV2 Sequence Header");
+  LIB_DEBUG("Successfully parsed AV2 Sequence Header");
   return true;
 }
 

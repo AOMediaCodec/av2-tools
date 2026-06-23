@@ -10,6 +10,7 @@
  */
 
 #include <spdlog/spdlog.h>
+#include <av2_obu/core/logging.h>
 
 #include <av2_obu/core/bitstream_reader.h>
 #include <av2_obu/obus/multi_frame_header_obu.h>
@@ -17,11 +18,11 @@
 namespace av2_obu {
 
 bool MultiFrameHeaderOBU::parse_payload(std::ifstream& ifs) {
-  spdlog::debug("Parsing MULTI_FRAME_HEADER OBU payload ({} bytes)", position_.payload_size);
+  LIB_DEBUG("Parsing MULTI_FRAME_HEADER OBU payload ({} bytes)", position_.payload_size);
 
   raw_payload_.resize(position_.payload_size);
   if (!ifs.read(reinterpret_cast<char*>(raw_payload_.data()), position_.payload_size)) {
-    spdlog::error("Failed to read MULTI_FRAME_HEADER payload");
+    LIB_ERROR("Failed to read MULTI_FRAME_HEADER payload");
     return false;
   }
 
@@ -55,10 +56,10 @@ bool MultiFrameHeaderOBU::parse_payload(std::ifstream& ifs) {
     // TODO: Parse seg_info() for deep mode
     // For lightweight mode, just note presence — seg_info() is complex
     // and not needed for packaging.
-    spdlog::debug("MFH: seg_info present but not parsed (lightweight mode)");
+    LIB_DEBUG("MFH: seg_info present but not parsed (lightweight mode)");
   }
 
-  spdlog::debug("MFH: id={}, seq_header_id={}, frame_size={}",
+  LIB_DEBUG("MFH: id={}, seq_header_id={}, frame_size={}",
                 mfh_id_, mfh_seq_header_id_,
                 mfh_frame_size_present_flag_ ? std::to_string(mfh_frame_width_) + "x" +
                                                    std::to_string(mfh_frame_height_)

@@ -48,6 +48,7 @@ target_sources(av2_obu
     src/core/obu_parser.cpp
     src/core/base_obu.cpp
     src/core/bitstream_reader.cpp
+    src/core/bitstream_writer.cpp
     src/core/av2_sequence_header.cpp
     src/core/av2_types.cpp
     src/core/temporal_unit.cpp
@@ -91,6 +92,7 @@ target_sources(av2_obu
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/av2_obu/core/obu_parser.h>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/av2_obu/core/base_obu.h>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/av2_obu/core/bitstream_reader.h>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/av2_obu/core/bitstream_writer.h>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/av2_obu/core/av2_sequence_header.h>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/av2_obu/core/av2_types.h>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/av2_obu/core/temporal_unit.h>
@@ -160,10 +162,15 @@ set_target_properties(av2_obu PROPERTIES POSITION_INDEPENDENT_CODE ON)
 add_subdirectory(apps/av2_obu_tool)
 add_subdirectory(apps/av2_obu_switcher)
 
-# av2_obu_packager - Optional (requires libisomedia)
-option(BUILD_PACKAGER "Build av2_obu_packager with libisomedia support" OFF)
-if(BUILD_PACKAGER)
-  message(STATUS "Building av2_obu_packager with libisomedia")
+# Container tools (av2_mux + av2_demux) - Optional (require libisomedia).
+# Legacy alias BUILD_PACKAGER is honoured to keep old build invocations working.
+option(BUILD_CONTAINER_TOOLS "Build av2_mux / av2_demux with libisomedia support" OFF)
+if(BUILD_PACKAGER AND NOT BUILD_CONTAINER_TOOLS)
+  message(STATUS "BUILD_PACKAGER is deprecated; treating as BUILD_CONTAINER_TOOLS=ON")
+  set(BUILD_CONTAINER_TOOLS ON)
+endif()
+if(BUILD_CONTAINER_TOOLS)
+  message(STATUS "Building container tools (av2_mux / av2_demux) with libisomedia")
 
   # Fetch libisomedia from MPEG Group repo (pcm_sniffer branch)
   FetchContent_Declare(
@@ -181,9 +188,10 @@ if(BUILD_PACKAGER)
   # Make libisomedia available
   FetchContent_MakeAvailable(libisomedia)
 
-  add_subdirectory(apps/av2_obu_packager)
+  add_subdirectory(apps/av2_mux)
+  add_subdirectory(apps/av2_demux)
 else()
-  message(STATUS "Skipping av2_obu_packager (use -DBUILD_PACKAGER=ON to enable)")
+  message(STATUS "Skipping container tools (use -DBUILD_CONTAINER_TOOLS=ON to enable)")
 endif()
 
 add_subdirectory(apps/av2_obu_channel_sim)

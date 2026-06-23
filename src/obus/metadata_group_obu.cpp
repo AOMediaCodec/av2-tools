@@ -10,6 +10,7 @@
  */
 
 #include <spdlog/spdlog.h>
+#include <av2_obu/core/logging.h>
 
 #include <av2_obu/core/bitstream_reader.h>
 #include <av2_obu/obus/metadata_group_obu.h>
@@ -18,11 +19,11 @@ namespace av2_obu {
 
 bool MetadataGroupOBU::parse_payload(std::ifstream& ifs) {
   if (position_.payload_size == 0) {
-    spdlog::warn("Metadata Group OBU has no payload");
+    LIB_WARN("Metadata Group OBU has no payload");
     return true;
   }
 
-  spdlog::debug("Parsing metadata group payload ({} bytes)", position_.payload_size);
+  LIB_DEBUG("Parsing metadata group payload ({} bytes)", position_.payload_size);
 
   try {
     BitstreamReader br(ifs, position_.payload_size);
@@ -31,31 +32,31 @@ bool MetadataGroupOBU::parse_payload(std::ifstream& ifs) {
     metadata_is_suffix_ = (byte1 >> 7) & 0x1;
     metadata_necessity_idc_ = (byte1 >> 5) & 0x3;
     metadata_application_id_ = byte1 & 0x1F;
-    spdlog::debug("  metadata_is_suffix: {}", int(metadata_is_suffix_));
-    spdlog::debug("  metadata_necessity_idc: {}", int(metadata_necessity_idc_));
-    spdlog::debug("  metadata_application_id: {}", int(metadata_application_id_));
+    LIB_DEBUG("  metadata_is_suffix: {}", int(metadata_is_suffix_));
+    LIB_DEBUG("  metadata_necessity_idc: {}", int(metadata_necessity_idc_));
+    LIB_DEBUG("  metadata_application_id: {}", int(metadata_application_id_));
 
     uint32_t metadata_unit_cnt_minus_1 = br.read_leb128();
     metadata_unit_cnt_ = metadata_unit_cnt_minus_1 + 1;
 
-    spdlog::debug("  metadata_unit_cnt: {}", metadata_unit_cnt_);
+    LIB_DEBUG("  metadata_unit_cnt: {}", metadata_unit_cnt_);
 
     // Parse each metadata unit
     units_.clear();
     for (uint32_t i = 0; i < metadata_unit_cnt_; ++i) {
       MetadataUnit unit;
 
-      spdlog::debug("  Parsing metadata unit {}", i);
+      LIB_DEBUG("  Parsing metadata unit {}", i);
 
       if (!unit.parse_group_header(br, header_.get_xlayer_id())) {
-        spdlog::warn("Failed to parse metadata unit {} header", i);
+        LIB_WARN("Failed to parse metadata unit {} header", i);
         return true;
       }
 
       // Parse metadata unit payload if not cancelled
       if (!unit.is_cancelled()) {
         if (!unit.parse_payload(br)) {
-          spdlog::warn("Failed to parse metadata unit {} payload", i);
+          LIB_WARN("Failed to parse metadata unit {} payload", i);
         }
         // TODO: Parse mup_extension_bytes
       }
@@ -67,11 +68,11 @@ bool MetadataGroupOBU::parse_payload(std::ifstream& ifs) {
     if (!parse_obu_trailing_bits(br))
       return false;
 
-    spdlog::debug("Successfully parsed all {} metadata units", units_.size());
+    LIB_DEBUG("Successfully parsed all {} metadata units", units_.size());
     return true;
 
   } catch (const std::exception& e) {
-    spdlog::warn("Failed to parse metadata group OBU after {} units ({}), continuing with next OBU",
+    LIB_WARN("Failed to parse metadata group OBU after {} units ({}), continuing with next OBU",
                  units_.size(), e.what());
     return true;  // Continue parsing rest of file
   }

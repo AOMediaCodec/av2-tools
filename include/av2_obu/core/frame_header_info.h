@@ -48,14 +48,28 @@ struct FrameHeaderInfo {
   int32_t LongTermId = -1;
   uint32_t long_term_id_plus_1 = 0;
 
+  // Bridge frame
+  bool IsBridge = false;
+  uint32_t bridge_frame_ref_idx = 0;
+  uint32_t bridge_frame_overwrite_flag = 0;
+
   uint32_t frame_size_override_flag = 0;
 
   // Display order
+  // OrderHintLsbs from the bitstream (per AV2 syntax `f(OrderHintBits) order_hint`).
+  // This is NOT the lifted full DispOrderHint produced by get_disp_order_hint();
+  // callers that need the lifted value compute it from this field plus their own
+  // wraparound state (the lightweight parser does not track reference state).
   uint32_t order_hint = 0;
 
   // Output flags
   uint32_t immediate_output_frame = 0;
   uint32_t implicit_output_frame = 0;
+
+  // True iff this frame produces an output picture in the temporal unit.
+  // Derived from immediate_output_frame || implicit_output_frame || ShowExistingFrame.
+  // Used by the packager to identify the output frame within a TU for CTS / ctts derivation.
+  bool is_output_frame = false;
 
   // Primary reference
   uint32_t primary_ref_frame = PRIMARY_REF_NONE;
@@ -81,6 +95,15 @@ struct FrameHeaderInfo {
   uint32_t use_bru = 0;
   uint32_t bru_ref = 0;
   uint32_t bru_inactive = 0;
+
+  // Inter ref-frame MV signalling
+  uint32_t use_ref_frame_mvs = 0;
+  uint32_t tmvp_sample_step_minus_1 = 0;
+
+  // Film grain (per-frame; references SH film_grain_params_present)
+  uint32_t apply_grain = 0;
+  uint32_t fgm_id = 0;
+  uint32_t grain_seed = 0;
 
   // TIP
   uint32_t TipFrameMode = TIP_FRAME_DISABLED;

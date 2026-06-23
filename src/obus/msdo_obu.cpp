@@ -10,6 +10,7 @@
  */
 
 #include <spdlog/spdlog.h>
+#include <av2_obu/core/logging.h>
 
 #include <av2_obu/core/bitstream_reader.h>
 #include <av2_obu/obus/msdo_obu.h>
@@ -17,11 +18,11 @@
 namespace av2_obu {
 
 bool MSDOOBU::parse_payload(std::ifstream& ifs) {
-  spdlog::debug("Parsing MSDO payload ({} bytes)", position_.payload_size);
+  LIB_DEBUG("Parsing MSDO payload ({} bytes)", position_.payload_size);
 
   raw_payload_.resize(position_.payload_size);
   if (!ifs.read(reinterpret_cast<char*>(raw_payload_.data()), position_.payload_size)) {
-    spdlog::error("Failed to read MSDO payload");
+    LIB_ERROR("Failed to read MSDO payload");
     return false;
   }
 
@@ -52,7 +53,7 @@ bool MSDOOBU::parse_payload(std::ifstream& ifs) {
   if (!parse_obu_trailing_bits(br))
     return false;
 
-  spdlog::debug("MSDO: {} streams", num_streams_);
+  LIB_DEBUG("MSDO: {} streams", num_streams_);
   return true;
 }
 
