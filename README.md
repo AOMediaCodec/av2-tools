@@ -2,6 +2,11 @@
 
 Tools developed within the AOMedia Storage and Transport Formats (STF) Working Group for parsing, analyzing, manipulating, and packaging AV2 bitstreams.
 
+## Related repositories
+
+- [av2-isobmff](https://github.com/AOMediaCodec/av2-isobmff) - the AV2-in-ISOBMFF specification these tools implement.
+- [av2-interop-private](https://github.com/AOMediaCodec/av2-interop-private) - AV2 interop stream recipes and catalog that consume these tools.
+
 ## How to Build
 
 ```bash
