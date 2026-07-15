@@ -13,6 +13,9 @@
 #include "mux_log.h"
 
 #include <algorithm>
+#include <cstdint>
+#include <map>
+#include <vector>
 
 #include <spdlog/fmt/fmt.h>
 #include <spdlog/spdlog.h>
@@ -108,25 +111,6 @@ bool Av2Muxer::setup_video_track(const OBUParser& parser) {
   }
   const AV2SequenceHeader& sh = first_sh->sequence_header();
 
-  // Multi-sample-entry on SH change is not implemented yet; warn so users know
-  // later SHs will be silently lost from av2C.
-  const auto& sh_stats = parser.get_statistics().sequence_headers;
-  if (sh_stats.has_changes) {
-    MUX_WARN(
-      "Bitstream contains {} sequence header(s) with differing bytes (changes at OBU indices: "
-      "{}). Multi-sample-entry support is not implemented; only the first SH (seq_header_id={}) "
-      "will be carried in av2C. Samples that depend on a later SH may decode incorrectly.",
-      sh_stats.count, [&] {
-        std::string out;
-        for (size_t i = 0; i < sh_stats.change_positions.size(); ++i) {
-          if (i) out += ", ";
-          out += std::to_string(sh_stats.change_positions[i]);
-        }
-        return out;
-      }(),
-      sh.seq_header_id);
-  }
-
   strategy_.any_non_monotonic = (sh.monotonic_output_order_flag == 0);
   if (strategy_.any_non_monotonic) {
     if (!check_doh_lifter_supported(parser)) return false;
@@ -135,10 +119,57 @@ bool Av2Muxer::setup_video_track(const OBUParser& parser) {
 
   AV2CodecConfigurationBox av2c(input_ifs_);
   av2c.set_from_sequence_header(sh);
-  if (!av2c.append_config_obu(*first_sh)) {
-    MUX_ERROR("Failed to append SH to av2C configOBUs");
+
+  auto read_obu_bytes = [&](const BaseOBU& o) {
+    const auto& pos = o.position();
+    size_t total = pos.size_field_len + pos.header_len + pos.payload_size;
+    std::vector<uint8_t> b(total);
+    input_ifs_.clear();
+    input_ifs_.seekg(pos.start_pos);
+    input_ifs_.read(reinterpret_cast<char*>(b.data()), static_cast<std::streamsize>(total));
+    input_ifs_.clear();
+    return b;
+  };
+
+  // Collect config OBUs in bitstream order from the first TU SHs, LCR, OPS, CI.
+  // If encoder interleaves a frame OBU between config OBUs, that frame simply lands sample
+  if (parser.temporal_units().empty()) {
+    MUX_ERROR("No temporal units found");
     return false;
   }
+  std::map<std::pair<int, uint32_t>, std::vector<uint8_t>> config_bytes;
+  size_t config_count = 0, sh_count = 0;
+  for (const BaseOBU* p : parser.temporal_units().front()) {
+    if (!is_config_obu(p->type())) continue;
+    config_bytes[{static_cast<int>(p->type()), p->header().get_xlayer_id()}] = read_obu_bytes(*p);
+    if (p->type() == OBUType::SEQUENCE_HEADER) ++sh_count;
+    ++config_count;
+    if (!av2c.append_config_obu(*p)) {
+      MUX_ERROR("Failed to append config OBU (type {}) to av2C configOBUs",
+                static_cast<int>(p->type()));
+      return false;
+    }
+  }
+
+  // Config OBUs live only in the sample entry. If a later occurrence differs,
+  // we would need multiple SE which is not yet implemented.
+  for (const auto& obu_ptr : parser.obus()) {
+    const BaseOBU* p = obu_ptr.get();
+    if (!is_config_obu(p->type())) continue;
+    auto it = config_bytes.find({static_cast<int>(p->type()), p->header().get_xlayer_id()});
+    if (it == config_bytes.end() || read_obu_bytes(*p) != it->second) {
+      config_changes_over_time_ = true;
+      break;
+    }
+  }
+
+  if (config_changes_over_time_) {
+    MUX_WARN(
+      "Configuration OBUs change over the course of the track. Multi-sample-entry support is not yet "
+      "implemented; only the first temporal unit's configuration is carried in av2C. Samples that "
+      "depend on later configuration may decode incorrectly.");
+  }
+  MUX_DEBUG("configOBUs: {} OBU(s) ({} sequence header(s))", config_count, sh_count);
 
   uint32_t w_full = static_cast<uint32_t>(sh.max_frame_width_minus_1) + 1;
   uint32_t h_full = static_cast<uint32_t>(sh.max_frame_height_minus_1) + 1;

@@ -310,6 +310,13 @@ inline bool is_key_frame_obu(OBUType type) {
   return type == OBUType::CLK || type == OBUType::OLK;
 }
 
+// Configuration OBUs carried in the AV2CodecConfigurationBox (configOBUs) of the
+// sample entry rather than in samples.
+inline bool is_config_obu(OBUType type) {
+  return type == OBUType::SEQUENCE_HEADER || type == OBUType::LAYER_CONFIGURATION_RECORD ||
+         type == OBUType::OPERATING_POINT_SET || type == OBUType::CONTENT_INTERPRETATION;
+}
+
 inline bool is_regular_obu(OBUType type) {
   return type == OBUType::OLK || type == OBUType::REGULAR_TILE_GROUP ||
          type == OBUType::REGULAR_TIP || type == OBUType::REGULAR_SEF ||

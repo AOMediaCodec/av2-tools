@@ -23,11 +23,6 @@ bool is_coded_frame_obu(OBUType t) {
   return is_tile_group(t) || is_tip_frame(t) || is_sef(t) || t == OBUType::BRIDGE_FRAME;
 }
 
-bool is_hls_obu(OBUType t) {
-  return t == OBUType::SEQUENCE_HEADER || t == OBUType::LAYER_CONFIGURATION_RECORD ||
-         t == OBUType::OPERATING_POINT_SET;
-}
-
 }  // namespace
 
 bool TemporalUnit::is_sync_sample() const {
@@ -47,20 +42,12 @@ bool TemporalUnit::is_sync_sample() const {
   return any_frame;
 }
 
-std::vector<const BaseOBU*> TemporalUnit::hls_obus() const {
-  std::vector<const BaseOBU*> out;
-  for (const auto* obu : obus_) {
-    if (is_hls_obu(obu->type())) out.push_back(obu);
-  }
-  return out;
-}
-
 std::vector<const BaseOBU*> TemporalUnit::sample_obus(bool keep_td) const {
   std::vector<const BaseOBU*> out;
   for (const auto* obu : obus_) {
     auto t = obu->type();
-    if (is_hls_obu(t)) continue;            // belongs in configOBUs
-    if (t == OBUType::PADDING) continue;    // forbidden in samples per av2-isobmff
+    if (is_config_obu(t)) continue;         // carried in configOBUs, not samples
+    if (t == OBUType::PADDING) continue;     // forbidden in samples per av2-isobmff
     if (t == OBUType::TEMPORAL_DELIMITER && !keep_td) continue;  // sample boundary == TU boundary
     out.push_back(obu);
   }

@@ -55,6 +55,9 @@ private:
   std::unique_ptr<DisplayOrderLifter> doh_lifter_;
   RefFrameBuffer ref_buffer_;
   std::optional<ColrInfo> last_colr_;
+
+  // Detect (SH, LCR, OPS, CI) changes over time -> would require multiple SE
+  bool config_changes_over_time_ = false;
 };
 
 void log_stream_summary(const class OBUParser& parser);

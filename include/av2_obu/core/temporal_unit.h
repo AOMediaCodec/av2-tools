@@ -35,11 +35,9 @@ public:
   const std::vector<const BaseOBU*>& obus() const { return obus_; }
   const BaseOBU* obu(size_t index) const { return obus_[index]; }
 
-  // Packager-oriented filtered views (computed on demand).
-  // Can be used to drive sample-entry transitions on SH change.
-  std::vector<const BaseOBU*> hls_obus() const;
-
-  // OBUs that go into the ISOBMFF sample bytes.
+  // OBUs that go into the ISOBMFF sample bytes: frame data only. Configuration
+  // OBUs (sequence headers, LCR, OPS, content interpretation) are excluded -
+  // they are carried in configOBUs of the sample entry.
   std::vector<const BaseOBU*> sample_obus(bool keep_td = false) const;
 
   auto begin() const { return obus_.begin(); }

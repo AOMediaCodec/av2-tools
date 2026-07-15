@@ -313,7 +313,7 @@ void OBUParser::build_temporal_units() {
 
   // Every parsed OBU lands in the TU it belongs to.
   // Tools that want a ground-truth view consume tu.obus().
-  // The packager applies its own filters via tu.sample_obus() / tu.hls_obus().
+  // The packager applies its own filters via tu.sample_obus().
   for (const auto& obu : obus_) {
     if (obu->type() == OBUType::TEMPORAL_DELIMITER) {
       if (!current_tu.empty()) {
