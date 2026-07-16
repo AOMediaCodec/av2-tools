@@ -111,6 +111,16 @@ bool Av2Muxer::setup_video_track(const OBUParser& parser) {
   }
   const AV2SequenceHeader& sh = first_sh->sequence_header();
 
+  // All extended layers of a temporal unit share the same timing info
+  // The base layer's frames can drive the CTS computation.
+  base_xlayer_id_ = GLOBAL_XLAYER_ID;
+  for (const auto& o : parser.obus()) {
+    if (!frame_header_of(o.get())) continue;
+    const uint32_t x = o->header().get_xlayer_id();
+    if (x == GLOBAL_XLAYER_ID) continue;
+    if (base_xlayer_id_ == GLOBAL_XLAYER_ID || x < base_xlayer_id_) base_xlayer_id_ = x;
+  }
+
   strategy_.any_non_monotonic = (sh.monotonic_output_order_flag == 0);
   if (strategy_.any_non_monotonic) {
     if (!check_doh_lifter_supported(parser)) return false;
@@ -199,26 +209,19 @@ bool Av2Muxer::setup_video_track(const OBUParser& parser) {
 }
 
 bool Av2Muxer::check_doh_lifter_supported(const OBUParser& parser) {
-  // The simple modular-unwrap lifter is only correct for a narrow class of
-  // streams; refuse anything outside it rather than silently producing bad CTS.
-  // See display_order_lifter.h for the full list of preconditions.
-  const auto stats = parser.get_statistics();
-  if (!stats.layers.is_single_layer) {
-    MUX_ERROR("Non-monotonic stream uses {} mlayer(s) and {} xlayer(s); the v1 DOH lifter "
-              "supports single-layer streams only. Refusing to produce wrong ctts.",
-              stats.layers.mlayer_ids.size(), stats.layers.xlayer_ids.size());
-    return false;
-  }
+  // For multi-layer streams the lifter runs on the base extended layer only
   uint32_t clk_count = 0;
   for (const auto& obu : parser.obus()) {
+    if (obu->header().get_xlayer_id() != base_xlayer_id_) continue;
     if (obu->type() == OBUType::CLK) ++clk_count;
   }
   if (clk_count > 1) {
-    MUX_ERROR("Non-monotonic stream contains {} CLK frames (multi-CVS); the v1 DOH lifter "
-              "does not reset across CVS boundaries.", clk_count);
+    MUX_ERROR("Non-monotonic stream: base xlayer has {} CLK frames (multi-CVS); the v1 DOH "
+              "lifter does not reset across CVS boundaries.", clk_count);
     return false;
   }
   for (const auto& obu : parser.obus()) {
+    if (obu->header().get_xlayer_id() != base_xlayer_id_) continue;
     if (obu->type() == OBUType::BRIDGE_FRAME) {
       MUX_ERROR("Non-monotonic stream contains a Bridge frame at OBU offset {}; its "
                 "DispOrderHint is RefOrderHint[bridge_frame_ref_idx], which the v1 lifter "
@@ -259,11 +262,9 @@ std::vector<int32_t> Av2Muxer::compute_composition_offsets(
     int32_t off = 0;
     int64_t output_doh = -1;
 
-    // Process every coded frame OBU in this TU through the lifter so the ref
-    // buffer reflects the bitstream's decode-order state. The output frame's
-    // lifted DOH (the last is_output_frame=true frame in decode order, if any)
-    // determines this sample's ctts.
+    // Feed only the base extended layer's frames to the lifter (sample has shared timing for all layers)
     for (const auto* obu : tus[i].obus()) {
+      if (obu->header().get_xlayer_id() != base_xlayer_id_) continue;
       const FrameHeaderInfo* fh = frame_header_of(obu);
       if (!fh) continue;
       const int64_t doh = doh_lifter_->process(*obu, *fh, sh, ref_buffer_);

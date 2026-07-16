@@ -58,6 +58,9 @@ private:
 
   // Detect (SH, LCR, OPS, CI) changes over time -> would require multiple SE
   bool config_changes_over_time_ = false;
+
+  // Lowest non-global obu_xlayer_id among frame OBUs (all layers share timing info)
+  uint32_t base_xlayer_id_ = 0;
 };
 
 void log_stream_summary(const class OBUParser& parser);
