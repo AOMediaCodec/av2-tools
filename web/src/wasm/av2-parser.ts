@@ -36,9 +36,10 @@ export async function initWasm(): Promise<void> {
   const createModule = await loadEmscriptenModule();
   wasmModule = await createModule({
     locateFile: (path: string) => {
-      // Ensure .wasm file is loaded from /wasm/ directory
+      // Resolve against the page base so it works under any deploy path
+      // (root, GitHub project page /av2-tools/, or local dev).
       if (path.endsWith('.wasm')) {
-        return `/wasm/${path}`;
+        return new URL(`wasm/${path}`, document.baseURI).href;
       }
       return path;
     },
@@ -58,7 +59,7 @@ function loadEmscriptenModule(): Promise<(config?: any) => Promise<AV2Module>> {
     }
 
     const script = document.createElement('script');
-    script.src = '/wasm/av2-parser.js';
+    script.src = new URL('wasm/av2-parser.js', document.baseURI).href;
     script.async = true;
 
     script.onload = () => {
