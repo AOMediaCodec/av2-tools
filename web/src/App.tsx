@@ -3,6 +3,7 @@ import { FileUpload } from './components/FileUpload';
 import { OBUBrowser } from './components/OBUBrowser';
 import { BitstreamStats } from './components/BitstreamStats';
 import { initWasm, parseAV2Bitstream, isWasmSupported } from './wasm/av2-parser';
+import { demuxMp4ToObu, looksLikeMp4 } from './mp4/av2Demux';
 import { BUILD_VERSION } from './generated/version';
 import './App.css';
 
@@ -23,6 +24,7 @@ type AppState =
   | { status: 'loading' }
   | { status: 'ready' }
   | { status: 'fetching'; url: string }
+  | { status: 'demuxing'; filename: string }
   | { status: 'parsing'; filename: string }
   | { status: 'parsed'; result: any; sourceUrl?: string }
   | { status: 'error'; message: string };
@@ -32,10 +34,16 @@ function App() {
   const [activeTab, setActiveTab] = useState<'browser' | 'statistics'>('browser');
 
   const handleFileLoaded = useCallback(async (data: Uint8Array, filename: string, sourceUrl?: string) => {
-    setState({ status: 'parsing', filename });
-
     try {
-      const result = await parseAV2Bitstream(data);
+      // .mp4 (AV2-in-ISOBMFF): demux to an elementary stream first, then parse
+      // the reconstructed OBUs exactly as for an uploaded .obu.
+      let obuData = data;
+      if (looksLikeMp4(data, filename)) {
+        setState({ status: 'demuxing', filename });
+        obuData = await demuxMp4ToObu(data);
+      }
+      setState({ status: 'parsing', filename });
+      const result = await parseAV2Bitstream(obuData);
       // Replace the temp filename with the actual filename
       result.file = filename;
       setState({ status: 'parsed', result, sourceUrl });
@@ -169,6 +177,13 @@ function App() {
           <div className="status-message">
             <div className="spinner" />
             <p>Fetching {state.url}...</p>
+          </div>
+        )}
+
+        {state.status === 'demuxing' && (
+          <div className="status-message">
+            <div className="spinner" />
+            <p>Demuxing {state.filename} (MP4 &rarr; AV2 elementary stream)...</p>
           </div>
         )}
 

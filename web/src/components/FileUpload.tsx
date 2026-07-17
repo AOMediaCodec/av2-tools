@@ -75,7 +75,7 @@ export function FileUpload({ onFileLoaded, disabled }: FileUploadProps) {
       <input
         type="file"
         id="file-input"
-        accept=".bin,.av2,.obu"
+        accept=".bin,.av2,.obu,.mp4,.m4s,.m4v,.mov"
         onChange={handleChange}
         disabled={disabled}
       />
@@ -83,6 +83,7 @@ export function FileUpload({ onFileLoaded, disabled }: FileUploadProps) {
         <div className="upload-icon">📁</div>
         <div className="upload-text">
           <strong>Drop AV2 bitstream here</strong> or click to browse
+          <div className="upload-hint">.obu elementary stream or .mp4 (AV2 track)</div>
         </div>
       </label>
     </div>
