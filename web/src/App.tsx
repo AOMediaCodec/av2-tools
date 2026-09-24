@@ -17,6 +17,8 @@ const ALLOWED_FETCH_ORIGINS = [
   // Path-style S3 URLs (both regions)
   'https://s3.amazonaws.com',
   'https://s3.us-west-1.amazonaws.com',
+  // podborski personal testing host -- remove once test content moves to an S3 bucket above
+  'https://av2spec.scv.apple.com',
 ];
 
 type AppState =
