@@ -55,7 +55,9 @@ Mp4Writer::Mp4Writer() {
 }
 
 Mp4Writer::~Mp4Writer() {
-  if (sample_entry_) MP4DisposeHandle(sample_entry_);
+  for (auto& [idx, handle] : sample_entries_) {
+    if (handle) MP4DisposeHandle(handle);
+  }
   if (movie_) MP4DisposeMovie(movie_);
 }
 
@@ -75,51 +77,11 @@ bool Mp4Writer::add_video_track(uint32_t timescale, uint16_t width, uint16_t hei
     return false;
   }
 
-  std::vector<uint8_t> av2c_bytes = av2c.serialize();
-  if (av2c_bytes.empty()) {
-    MUX_ERROR("av2C serialization produced empty payload");
-    return false;
-  }
-
-  MP4Handle av2c_payload = make_handle(av2c_bytes.data(), av2c_bytes.size());
-  if (!av2c_payload) {
-    MUX_ERROR("MP4NewHandle(av2C payload) failed");
-    return false;
-  }
-
-  MP4GenericAtom av2c_atom = nullptr;
-  err = MP4NewForeignAtom(&av2c_atom, kAtomTypeAv2C, av2c_payload);
-  if (err != MP4NoErr || !av2c_atom) {
-    MUX_ERROR("MP4NewForeignAtom('av2C') failed (err={})", err);
-    MP4DisposeHandle(av2c_payload);
-    return false;
-  }
-
-  err = MP4NewHandle(0, &sample_entry_);
-  if (err != MP4NoErr || !sample_entry_) {
-    MUX_ERROR("MP4NewHandle(sample_entry) failed (err={})", err);
-    return false;
-  }
-
-  err = ISONewGeneralSampleDescription(track_, sample_entry_, /*dataRefIdx=*/1,
-                                       kSampleEntryTypeAv02, av2c_atom);
-  if (err != MP4NoErr) {
-    MUX_ERROR("ISONewGeneralSampleDescription failed (err={})", err);
-    return false;
-  }
-
-  err = ISOSetSampleDescriptionDimensions(sample_entry_, width, height);
-  if (err != MP4NoErr) {
-    MUX_ERROR("ISOSetSampleDescriptionDimensions failed (err={})", err);
-    return false;
-  }
-
-  return true;
+  uint32_t desc_idx = add_sample_entry(av2c, width, height, std::nullopt);
+  return desc_idx == 1;
 }
 
-bool Mp4Writer::add_colr_nclx(const ColrInfo& info) {
-  if (!sample_entry_) return false;
-
+bool Mp4Writer::attach_colr_nclx(MP4Handle entry, const ColrInfo& info) {
   // TODO(https://github.com/MPEGGroup/isobmff/issues/76): replace with a libisomedia helper once landed.
   // ColourInformationBox
   uint8_t payload[11];
@@ -149,7 +111,7 @@ bool Mp4Writer::add_colr_nclx(const ColrInfo& info) {
     return false;
   }
 
-  err = ISOAddAtomToSampleDescription(sample_entry_, atom);
+  err = ISOAddAtomToSampleDescription(entry, atom);
   if (err != MP4NoErr) {
     MUX_ERROR("ISOAddAtomToSampleDescription('colr') failed (err={})", err);
     return false;
@@ -161,9 +123,77 @@ bool Mp4Writer::add_colr_nclx(const ColrInfo& info) {
   return true;
 }
 
+bool Mp4Writer::add_colr_nclx(const ColrInfo& info) {
+  auto it = sample_entries_.find(1);
+  if (it == sample_entries_.end()) return false;
+  return attach_colr_nclx(it->second, info);
+}
+
+uint32_t Mp4Writer::add_sample_entry(const AV2CodecConfigurationBox& av2c, uint16_t width,
+                                     uint16_t height, const std::optional<ColrInfo>& colr) {
+  if (!track_) return 0;
+
+  std::vector<uint8_t> av2c_bytes = av2c.serialize();
+  if (av2c_bytes.empty()) {
+    MUX_ERROR("av2C serialization produced empty payload");
+    return 0;
+  }
+
+  MP4Handle av2c_payload = make_handle(av2c_bytes.data(), av2c_bytes.size());
+  if (!av2c_payload) {
+    MUX_ERROR("MP4NewHandle(av2C payload) failed");
+    return 0;
+  }
+
+  MP4GenericAtom av2c_atom = nullptr;
+  MP4Err err = MP4NewForeignAtom(&av2c_atom, kAtomTypeAv2C, av2c_payload);
+  if (err != MP4NoErr || !av2c_atom) {
+    MUX_ERROR("MP4NewForeignAtom('av2C') failed (err={})", err);
+    MP4DisposeHandle(av2c_payload);
+    return 0;
+  }
+
+  MP4Handle entry = nullptr;
+  err = MP4NewHandle(0, &entry);
+  if (err != MP4NoErr || !entry) {
+    MUX_ERROR("MP4NewHandle(sample_entry) failed (err={})", err);
+    return 0;
+  }
+
+  err = ISONewGeneralSampleDescription(track_, entry, /*dataRefIdx=*/1, kSampleEntryTypeAv02,
+                                       av2c_atom);
+  if (err != MP4NoErr) {
+    MUX_ERROR("ISONewGeneralSampleDescription failed (err={})", err);
+    MP4DisposeHandle(entry);
+    return 0;
+  }
+
+  err = ISOSetSampleDescriptionDimensions(entry, width, height);
+  if (err != MP4NoErr) {
+    MUX_ERROR("ISOSetSampleDescriptionDimensions failed (err={})", err);
+    MP4DisposeHandle(entry);
+    return 0;
+  }
+
+  if (colr && !attach_colr_nclx(entry, *colr)) {
+    MP4DisposeHandle(entry);
+    return 0;
+  }
+
+  uint32_t desc_idx = ++next_desc_idx_;
+  sample_entries_[desc_idx] = entry;
+  return desc_idx;
+}
+
 bool Mp4Writer::add_sample(const std::vector<uint8_t>& bytes, uint32_t duration, bool is_sync,
-                           int32_t composition_offset) {
-  if (!media_ || !sample_entry_) return false;
+                           int32_t composition_offset, uint32_t desc_idx) {
+  if (!media_ || sample_entries_.find(desc_idx) == sample_entries_.end()) return false;
+
+  if (current_desc_idx_ != 0 && desc_idx != current_desc_idx_) {
+    if (!flush_chunk()) return false;
+  }
+  current_desc_idx_ = desc_idx;
+
   pending_sizes_.push_back(static_cast<uint32_t>(bytes.size()));
   pending_data_.insert(pending_data_.end(), bytes.begin(), bytes.end());
   pending_durations_.push_back(duration);
@@ -211,7 +241,8 @@ bool Mp4Writer::flush_chunk() {
     ctts = make_handle(pending_ctts_offsets_.data(), n * sizeof(int32_t));
   }
 
-  MP4Handle entry_for_call = first_chunk_ ? sample_entry_ : nullptr;
+  bool already_attached = entries_attached_.count(current_desc_idx_) > 0;
+  MP4Handle entry_for_call = already_attached ? nullptr : sample_entries_.at(current_desc_idx_);
 
   MP4Err err = MP4AddMediaSamples(media_, data, n, durations, sizes, entry_for_call,
                                   /*decodingOffsetsH=*/ctts, sync);
@@ -227,7 +258,7 @@ bool Mp4Writer::flush_chunk() {
     return false;
   }
 
-  first_chunk_ = false;
+  entries_attached_.insert(current_desc_idx_);
   pending_data_.clear();
   pending_sizes_.clear();
   pending_durations_.clear();

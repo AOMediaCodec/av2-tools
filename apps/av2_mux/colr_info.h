@@ -18,6 +18,7 @@
 namespace av2_obu {
 
 class OBUParser;
+class TemporalUnit;
 
 // CICP color metadata for the ISOBMFF 'colr' / nclx box.
 struct ColrInfo {
@@ -30,6 +31,10 @@ struct ColrInfo {
 // Search order: CI OBU > LCR (lowest xlayer with color info) > OPS.
 // Returns nullopt if no source carries color metadata.
 std::optional<ColrInfo> extract_colr_info(const OBUParser& parser);
+
+// Same search order as extract_colr_info(), scoped to a single TU's OBUs.
+// Used to pick colr for a new sample entry created at a CVS boundary.
+std::optional<ColrInfo> extract_colr_info_from_tu(const TemporalUnit& tu);
 
 // Resolves a CICP profile name (e.g. "bt709") to its ColrInfo. nullopt for unknown names
 std::optional<ColrInfo> colr_profile_by_name(const std::string& name);
