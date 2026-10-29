@@ -11,12 +11,14 @@
 
 #pragma once
 
+#include <cstdint>
 #include <fstream>
 #include <memory>
 #include <optional>
 #include <string>
 #include <vector>
 
+#include "av2_codec_config.h"
 #include "colr_info.h"
 #include "display_order_lifter.h"
 #include "mp4_writer.h"
@@ -30,6 +32,14 @@ class TemporalUnit;
 class SequenceHeaderOBU;
 class BaseOBU;
 
+// One entry per distinct av2C configuration (CVS) observed in the stream.
+struct SampleEntryRecord {
+  AV2CodecConfigurationBox av2c;
+  std::optional<ColrInfo> colr;
+  uint32_t desc_idx = 0;  // 1-based index assigned by Mp4Writer
+  std::vector<uint8_t> config_obu_bytes;  // serialized, for equality checks
+};
+
 // Drives mux of one elementary AV2 bitstream into one ISOBMFF .mp4.
 class Av2Muxer {
 public:
@@ -40,13 +50,15 @@ public:
 private:
   bool setup_video_track(const OBUParser& parser);
   bool check_doh_lifter_supported(const OBUParser& parser);
-  bool write_tu(const TemporalUnit& tu, int32_t composition_offset);
+  bool write_tu(const TemporalUnit& tu, uint32_t tu_index, int32_t composition_offset);
   bool assemble_sample_bytes(const TemporalUnit& tu, std::vector<uint8_t>& out);
   std::vector<int32_t> compute_composition_offsets(const OBUParser& parser,
                                                    const std::vector<TemporalUnit>& tus,
                                                    uint32_t start, uint32_t end);
 
   static const SequenceHeaderOBU* find_first_sequence_header(const OBUParser& parser);
+  static const SequenceHeaderOBU* find_sh_in_tu(const TemporalUnit& tu, uint32_t xlayer_id);
+  static void check_cmaf_invariants(const std::vector<SampleEntryRecord>& entries);
 
   std::string input_path_;
   MuxStrategy strategy_;
@@ -56,8 +68,11 @@ private:
   RefFrameBuffer ref_buffer_;
   std::optional<ColrInfo> last_colr_;
 
-  // Detect (SH, LCR, OPS, CI) changes over time -> would require multiple SE
-  bool config_changes_over_time_ = false;
+  // One entry per distinct av2C configuration (CVS) registered with the writer.
+  std::vector<SampleEntryRecord> sample_entries_;
+
+  // Maps TU index -> desc_idx, populated during setup_video_track().
+  std::vector<uint32_t> tu_desc_idx_;
 
   // Lowest non-global obu_xlayer_id among frame OBUs (all layers share timing info)
   uint32_t base_xlayer_id_ = 0;

@@ -62,4 +62,11 @@ private:
   std::ifstream* input_file_ = nullptr;
 };
 
+inline bool operator==(const AV2CodecConfigurationBox& a, const AV2CodecConfigurationBox& b) {
+  return a.serialize() == b.serialize();
+}
+inline bool operator!=(const AV2CodecConfigurationBox& a, const AV2CodecConfigurationBox& b) {
+  return !(a == b);
+}
+
 }  // namespace av2_obu
