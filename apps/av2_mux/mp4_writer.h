@@ -53,6 +53,14 @@ public:
   // Must be called before any add_sample()
   bool enable_signed_composition_offsets();
 
+  // Enables fragmented MP4 (empty moov with mvex/trex + moof/mdat fragments).
+  // Must be called after all sample entries are registered and before add_sample().
+  // If max_fragment_ticks == 0, fragments split at sync samples and desc_idx changes;
+  // if > 0, fragments also split when accumulated duration reaches max_fragment_ticks.
+  bool enable_fragmentation(uint32_t default_sample_duration, uint64_t max_fragment_ticks = 0);
+
+  uint32_t fragment_count() const { return fragment_count_; }
+
   // 0 disables auto-flush; caller drives chunk boundaries via flush_chunk()/finalize().
   void set_samples_per_chunk(uint32_t n) { samples_per_chunk_ = n; }
 
@@ -93,6 +101,10 @@ private:
 
   bool signed_ctts_enabled_ = false;
   uint32_t samples_per_chunk_ = 0;
+  bool fragmented_ = false;
+  uint64_t max_fragment_ticks_ = 0;
+  uint64_t pending_duration_ticks_ = 0;
+  uint32_t fragment_count_ = 0;
 
   bool attach_colr_nclx(MP4Handle entry, const ColrInfo& info);
 };

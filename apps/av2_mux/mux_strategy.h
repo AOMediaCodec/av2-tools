@@ -85,6 +85,8 @@ struct UserOptions {
   uint32_t start_tu = 0;
   uint32_t num_samples = 0;
   std::string colr_override;
+  bool fragmented = false;
+  uint32_t fragment_duration_ms = 0;
 };
 
 // Accepts either a CICP profile name (see colr_info.h::supported_colr_profile_names())
