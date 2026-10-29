@@ -16,6 +16,10 @@
 
 #include <spdlog/spdlog.h>
 
+extern "C" {
+#include "MP4Atoms.h"
+}
+
 namespace av2_obu {
 
 namespace {
@@ -189,7 +193,13 @@ bool Mp4Writer::add_sample(const std::vector<uint8_t>& bytes, uint32_t duration,
                            int32_t composition_offset, uint32_t desc_idx) {
   if (!media_ || sample_entries_.find(desc_idx) == sample_entries_.end()) return false;
 
-  if (current_desc_idx_ != 0 && desc_idx != current_desc_idx_) {
+  if (fragmented_) {
+    if (!pending_sizes_.empty() &&
+        (is_sync || desc_idx != current_desc_idx_ ||
+         (max_fragment_ticks_ > 0 && pending_duration_ticks_ >= max_fragment_ticks_))) {
+      if (!flush_chunk()) return false;
+    }
+  } else if (current_desc_idx_ != 0 && desc_idx != current_desc_idx_) {
     if (!flush_chunk()) return false;
   }
   current_desc_idx_ = desc_idx;
@@ -197,11 +207,12 @@ bool Mp4Writer::add_sample(const std::vector<uint8_t>& bytes, uint32_t duration,
   pending_sizes_.push_back(static_cast<uint32_t>(bytes.size()));
   pending_data_.insert(pending_data_.end(), bytes.begin(), bytes.end());
   pending_durations_.push_back(duration);
+  pending_duration_ticks_ += duration;
   if (is_sync) {
     pending_sync_indices_.push_back(static_cast<uint32_t>(pending_sizes_.size()));
   }
   if (signed_ctts_enabled_) pending_ctts_offsets_.push_back(composition_offset);
-  if (samples_per_chunk_ > 0 && pending_sizes_.size() >= samples_per_chunk_) {
+  if (!fragmented_ && samples_per_chunk_ > 0 && pending_sizes_.size() >= samples_per_chunk_) {
     return flush_chunk();
   }
   return true;
@@ -222,16 +233,84 @@ bool Mp4Writer::enable_signed_composition_offsets() {
   return true;
 }
 
+bool Mp4Writer::enable_fragmentation(uint32_t default_sample_duration,
+                                     uint64_t max_fragment_ticks) {
+  if (!movie_ || !track_ || !media_ || sample_entries_.empty()) return false;
+  if (!pending_sizes_.empty()) {
+    MUX_ERROR("enable_fragmentation() called after samples were buffered");
+    return false;
+  }
+
+  MP4Err err = MP4BeginMediaEdits(media_);
+  if (err != MP4NoErr) {
+    MUX_ERROR("MP4BeginMediaEdits failed (err={})", err);
+    return false;
+  }
+
+  err = ISOSetTrackFragmentDefaults(track_, default_sample_duration, /*default_size=*/0,
+                                    /*is_sync=*/0, /*pad=*/0);
+  if (err != MP4NoErr) {
+    MUX_ERROR("ISOSetTrackFragmentDefaults failed (err={})", err);
+    return false;
+  }
+
+  // Register all sample entries in stsd with 0 samples prior to starting the first fragment.
+  MP4Handle empty_h = make_handle(nullptr, 0);
+  for (const auto& [idx, entry_h] : sample_entries_) {
+    err = MP4AddMediaSamples(media_, empty_h, /*sampleCount=*/0, nullptr, nullptr, entry_h,
+                             nullptr, nullptr);
+    if (err != MP4NoErr) {
+      MUX_ERROR("MP4AddMediaSamples(0, desc_idx={}) failed (err={})", idx, err);
+      MP4DisposeHandle(empty_h);
+      return false;
+    }
+    entries_attached_.insert(idx);
+  }
+  MP4DisposeHandle(empty_h);
+
+  // Set default sample entry index in stbl to 1 so trex->default_sample_description_index = 1.
+  auto* mdia = reinterpret_cast<MP4MediaAtomPtr>(media_);
+  auto* minf = reinterpret_cast<MP4MediaInformationAtomPtr>(mdia->information);
+  auto* stbl = reinterpret_cast<MP4SampleTableAtomPtr>(minf->sampleTable);
+  stbl->setDefaultSampleEntry(stbl, 1);
+
+  err = MP4EndMediaEdits(media_);
+  if (err != MP4NoErr) {
+    MUX_ERROR("MP4EndMediaEdits failed (err={})", err);
+    return false;
+  }
+
+  fragmented_ = true;
+  max_fragment_ticks_ = max_fragment_ticks;
+  return true;
+}
+
 bool Mp4Writer::flush_chunk() {
   if (pending_sizes_.empty()) return true;
   if (!media_) return false;
 
   uint32_t n = static_cast<uint32_t>(pending_sizes_.size());
 
+  if (fragmented_) {
+    MP4Err frag_err = ISOStartMovieFragment(movie_);
+    if (frag_err != MP4NoErr) {
+      MUX_ERROR("ISOStartMovieFragment failed (err={})", frag_err);
+      return false;
+    }
+    ++fragment_count_;
+
+    auto* mdia = reinterpret_cast<MP4MediaAtomPtr>(media_);
+    auto* traf = reinterpret_cast<MP4TrackFragmentAtomPtr>(mdia->information);
+    auto* tfhd = reinterpret_cast<MP4TrackFragmentHeaderAtomPtr>(traf->tfhd);
+    tfhd->sample_description_index = current_desc_idx_;
+  }
+
   MP4Handle data = make_handle(pending_data_.data(), pending_data_.size());
   MP4Handle sizes = make_handle(pending_sizes_.data(), n * sizeof(uint32_t));
   MP4Handle durations = make_handle(pending_durations_.data(), n * sizeof(uint32_t));
-  MP4Handle sync = pending_sync_indices_.empty()
+  // In fragmented mode, TrackFragmentAtom treats sync == nullptr as "all samples are sync",
+  // so always pass a non-null handle (even when 0 sync samples are in the fragment).
+  MP4Handle sync = (!fragmented_ && pending_sync_indices_.empty())
                      ? nullptr
                      : make_handle(pending_sync_indices_.data(),
                                    pending_sync_indices_.size() * sizeof(uint32_t));
@@ -242,7 +321,8 @@ bool Mp4Writer::flush_chunk() {
   }
 
   bool already_attached = entries_attached_.count(current_desc_idx_) > 0;
-  MP4Handle entry_for_call = already_attached ? nullptr : sample_entries_.at(current_desc_idx_);
+  MP4Handle entry_for_call =
+    (fragmented_ || already_attached) ? nullptr : sample_entries_.at(current_desc_idx_);
 
   MP4Err err = MP4AddMediaSamples(media_, data, n, durations, sizes, entry_for_call,
                                   /*decodingOffsetsH=*/ctts, sync);
@@ -262,9 +342,15 @@ bool Mp4Writer::flush_chunk() {
   pending_data_.clear();
   pending_sizes_.clear();
   pending_durations_.clear();
+  pending_duration_ticks_ = 0;
   pending_sync_indices_.clear();
   pending_ctts_offsets_.clear();
-  MUX_DEBUG("Flushed chunk: {} samples", n);
+  if (fragmented_) {
+    MUX_DEBUG("Flushed movie fragment {}: {} samples (desc_idx={})", fragment_count_, n,
+              current_desc_idx_);
+  } else {
+    MUX_DEBUG("Flushed chunk: {} samples", n);
+  }
   return true;
 }
 

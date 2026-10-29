@@ -75,6 +75,17 @@ bool Av2Muxer::package(const OBUParser& parser, const std::string& output_path) 
     MUX_DEBUG("ctts: omitted (monotonic_output_order_flag=1)");
   }
 
+  if (strategy_.fragmentation.enabled) {
+    uint64_t max_frag_ticks =
+      (static_cast<uint64_t>(strategy_.fragmentation.fragment_duration_ms) * strategy_.timescale) /
+      1000;
+    MUX_DEBUG("fMP4: enabling movie fragments (fragment_duration_ms={}, max_frag_ticks={})",
+              strategy_.fragmentation.fragment_duration_ms, max_frag_ticks);
+    if (!writer_.enable_fragmentation(strategy_.default_sample_duration, max_frag_ticks)) {
+      return false;
+    }
+  }
+
   uint32_t num_samples = 0;
   uint32_t sync_samples = 0;
   for (uint32_t i = strategy_.start_tu; i < end_tu; ++i) {
@@ -96,9 +107,13 @@ bool Av2Muxer::package(const OBUParser& parser, const std::string& output_path) 
                              last_colr_->matrix_coefficients,
                              last_colr_->full_range_flag)
                : "colr=absent";
-  MUX_INFO("Wrote {} ({} samples, {} sync, {:.3f} fps, timescale={}, {}, {})", output_path,
+  std::string frag_str =
+    strategy_.fragmentation.enabled
+      ? fmt::format(", fragmented={} moof(s)", writer_.fragment_count())
+      : "";
+  MUX_INFO("Wrote {} ({} samples, {} sync, {:.3f} fps, timescale={}, {}, {}{})", output_path,
            num_samples, sync_samples, strategy_.frame_rate, strategy_.timescale, ctts_str,
-           colr_str);
+           colr_str, frag_str);
   return true;
 }
 

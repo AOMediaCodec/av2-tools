@@ -52,6 +52,8 @@ MuxStrategy determine_strategy(const OBUParser::Statistics& stats,
   s.start_tu = user_opts.start_tu;
   s.num_samples = user_opts.num_samples;
   s.colr_override = parse_colr_override(user_opts.colr_override);
+  s.fragmentation.enabled = user_opts.fragmented || (user_opts.fragment_duration_ms > 0);
+  s.fragmentation.fragment_duration_ms = user_opts.fragment_duration_ms;
 
   // Timing precedence: --fps > CI timing_info > default 30 fps.
   const auto& ci = stats.content_interpretation;
