@@ -12,6 +12,7 @@
 #pragma once
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 
 namespace av2_obu {
