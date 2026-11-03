@@ -11,9 +11,11 @@
 
 #pragma once
 
-#include <av2_obu/core/base_obu.h>
-
+#include <optional>
+#include <utility>
 #include <vector>
+
+#include <av2_obu/core/base_obu.h>
 
 namespace av2_obu {
 
@@ -64,6 +66,9 @@ public:
     uint32_t signaled_ids_flag = 0;
     std::vector<uint32_t> segment_ids;
   };
+
+  // Returns the composed atlas canvas (width, height) when parsed and non-zero.
+  std::optional<std::pair<uint32_t, uint32_t>> canvas_dimensions() const;
 
 protected:
   bool parse_payload(std::ifstream& ifs) override;

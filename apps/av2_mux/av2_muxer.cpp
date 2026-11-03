@@ -10,22 +10,24 @@
  */
 
 #include "av2_muxer.h"
-#include "mux_log.h"
+
+#include <spdlog/fmt/fmt.h>
+#include <spdlog/spdlog.h>
 
 #include <algorithm>
 #include <cstdint>
 #include <vector>
 
-#include <spdlog/fmt/fmt.h>
-#include <spdlog/spdlog.h>
-
 #include "av2_codec_config.h"
 #include "colr_info.h"
 #include "frame_header_helpers.h"
+#include "mux_log.h"
 #include <av2_obu/core/base_obu.h>
 #include <av2_obu/core/frame_header_info.h>
 #include <av2_obu/core/obu_parser.h>
 #include <av2_obu/core/temporal_unit.h>
+#include <av2_obu/obus/atlas_segment_obu.h>
+#include <av2_obu/obus/content_interpretation_obu.h>
 #include <av2_obu/obus/sequence_header_obu.h>
 
 namespace av2_obu {
@@ -183,6 +185,17 @@ bool Av2Muxer::setup_video_track(const OBUParser& parser) {
 
     uint32_t w_full = static_cast<uint32_t>(sequence_header.max_frame_width_minus_1) + 1;
     uint32_t h_full = static_cast<uint32_t>(sequence_header.max_frame_height_minus_1) + 1;
+    for (const BaseOBU* p : tus[i]) {
+      if (p->type() != OBUType::ATLAS_SEGMENT)
+        continue;
+      if (const auto* atlas = dynamic_cast<const AtlasSegmentOBU*>(p)) {
+        if (auto dims = atlas->canvas_dimensions()) {
+          w_full = dims->first;
+          h_full = dims->second;
+          break;
+        }
+      }
+    }
     if (w_full > 0xFFFF || h_full > 0xFFFF) {
       MUX_WARN("Frame dimensions {}x{} exceed 16-bit av2C field; truncating", w_full, h_full);
     }
@@ -198,7 +211,26 @@ bool Av2Muxer::setup_video_track(const OBUParser& parser) {
           std::make_unique<DisplayOrderLifter>(sequence_header.inter_config.OrderHintBits);
       }
 
-      if (!writer_.add_video_track(strategy_.timescale, width, height, av2c)) return false;
+      uint32_t track_width = width;
+      uint32_t track_height = height;
+      for (const auto& obu : parser.obus()) {
+        if (obu->type() != OBUType::CONTENT_INTERPRETATION)
+          continue;
+        const auto* ci = dynamic_cast<const ContentInterpretationOBU*>(obu.get());
+        if (!ci || !ci->has_aspect_ratio_info())
+          continue;
+        if (ci->sar_width() > 0 && ci->sar_height() > 0) {
+          const uint64_t scaled_w =
+            (static_cast<uint64_t>(width) * ci->sar_width() + ci->sar_height() / 2) /
+            ci->sar_height();
+          track_width = static_cast<uint32_t>(std::min<uint64_t>(scaled_w, 0xFFFF));
+        }
+        break;
+      }
+
+      if (!writer_.add_video_track(strategy_.timescale, width, height, av2c, track_width,
+                                   track_height))
+        return false;
       writer_.set_samples_per_chunk(strategy_.samples_per_chunk);
       if (colr && !writer_.add_colr_nclx(*colr)) return false;
       new_desc_idx = 1;

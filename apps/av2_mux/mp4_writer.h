@@ -39,7 +39,8 @@ public:
 
   // Creates the track and its first sample entry (desc_idx == 1).
   bool add_video_track(uint32_t timescale, uint16_t width, uint16_t height,
-                       const AV2CodecConfigurationBox& av2c);
+                       const AV2CodecConfigurationBox& av2c, uint32_t track_width = 0,
+                       uint32_t track_height = 0);
 
   // Must be called after add_video_track() and before the first add_sample().
   // Attaches colr to the first sample entry (desc_idx == 1).
