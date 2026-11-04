@@ -37,17 +37,23 @@ public:
   Mp4Writer(const Mp4Writer&) = delete;
   Mp4Writer& operator=(const Mp4Writer&) = delete;
 
-  // Creates the track and its first sample entry (desc_idx == 1).
-  bool add_video_track(uint32_t timescale, uint16_t width, uint16_t height,
-                       const AV2CodecConfigurationBox& av2c);
+  // Creates the track and its first out-of-band ('av2E') sample entry (desc_idx == 1).
+  bool add_video_track_outofband(uint32_t timescale, uint16_t width, uint16_t height,
+                                 const OutOfBandAV2CodecConfigurationBox& av2c);
 
-  // Must be called after add_video_track() and before the first add_sample().
-  // Attaches colr to the first sample entry (desc_idx == 1).
-  bool add_colr_nclx(const ColrInfo& info);
+  // Creates the track and its in-band ('av2e') sample entry (desc_idx == 1).
+  bool add_video_track_inband(uint32_t timescale, uint16_t width, uint16_t height,
+                              const InBandAV2CodecConfigurationBox& av2c);
 
-  // Creates an additional sample entry on the same track (CVS boundary with
-  // changed configOBUs). Returns the assigned desc_idx (>= 2), or 0 on failure.
-  uint32_t add_sample_entry(const AV2CodecConfigurationBox& av2c, uint16_t width,
+  // Must be called after add_video_track_outofband()/add_video_track_inband()/add_sample_entry()
+  // and before the first add_sample() for that desc_idx.
+  bool add_colr_nclx(const ColrInfo& info, uint32_t desc_idx = 1);
+  bool add_pixi(const PixiBox& pixi, uint32_t desc_idx = 1);
+  bool add_pasp(uint32_t h_spacing, uint32_t v_spacing, uint32_t desc_idx = 1);
+
+  // Creates an additional out-of-band ('av2E') sample entry on the same track (CVS boundary
+  // with changed configOBUs). Returns the assigned desc_idx (>= 2), or 0 on failure.
+  uint32_t add_sample_entry(const OutOfBandAV2CodecConfigurationBox& av2c, uint16_t width,
                             uint16_t height, const std::optional<ColrInfo>& colr);
 
   // Must be called before any add_sample()
@@ -56,11 +62,11 @@ public:
   // 0 disables auto-flush; caller drives chunk boundaries via flush_chunk()/finalize().
   void set_samples_per_chunk(uint32_t n) { samples_per_chunk_ = n; }
 
-  // desc_idx selects which sample entry (from add_video_track()/add_sample_entry())
+  // desc_idx selects which sample entry (from add_video_track_*()/add_sample_entry())
   // this sample belongs to. Changing desc_idx from the previous call forces a
   // chunk flush first, since a chunk cannot span sample entries.
   bool add_sample(const std::vector<uint8_t>& bytes, uint32_t duration, bool is_sync,
-                  int32_t composition_offset, uint32_t desc_idx);
+                  int32_t composition_offset = 0, uint32_t desc_idx = 1);
 
   // One flush_chunk() = one MP4AddMediaSamples() call = one stsc chunk.
   bool flush_chunk();

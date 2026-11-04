@@ -40,7 +40,12 @@ public:
   uint32_t matrix_coefficients() const { return matrix_coefficients_; }
   uint32_t full_range_flag() const { return full_range_flag_; }
   bool has_chroma_sample_position() const { return chroma_sample_position_present_flag_ != 0; }
+  uint64_t chroma_sample_position_top() const { return chroma_sample_position_top_; }
+  uint64_t chroma_sample_position_bottom() const { return chroma_sample_position_bottom_; }
   bool has_aspect_ratio_info() const { return aspect_ratio_info_present_flag_ != 0; }
+  uint32_t aspect_ratio_idc() const { return aspect_ratio_idc_; }
+  uint64_t sar_width() const { return sar_width_; }
+  uint64_t sar_height() const { return sar_height_; }
   bool has_timing_info() const { return timing_info_present_flag_ != 0; }
   const TimingInfo& get_timing_info() const { return timing_info_; }
 

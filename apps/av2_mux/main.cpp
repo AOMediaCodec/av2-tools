@@ -59,7 +59,11 @@ int main(int argc, char** argv) {
   app.add_flag(
     "--keep-td", keep_td,
     "Keep Temporal Delimiter OBUs inside samples. NOT RECOMMENDED — av2-isobmff says TDs "
-    "SHOULD NOT appear in samples; the sample boundary is the TU boundary.");
+    "SHALL NOT appear in samples; the sample boundary is the TU boundary.");
+  app.add_flag(
+    "--inband", opts.inband_config,
+    "Use InBandAV2SampleEntry ('av2e') with InBandAV2CodecConfigurationBox ('av2c') and keep "
+    "configuration OBUs in-band inside samples.");
   const std::string colr_help =
     "Force CICP color metadata (per ITU-T H.273 / ISO/IEC 23091-2) into the colr/nclx box. "
     "Accepts either a profile name [" + supported_colr_profile_names() + "] or a raw "
