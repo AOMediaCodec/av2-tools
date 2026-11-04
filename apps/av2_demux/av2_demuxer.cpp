@@ -13,6 +13,7 @@
 
 #include <cstring>
 #include <fstream>
+#include <map>
 #include <vector>
 
 #include <spdlog/spdlog.h>
@@ -75,13 +76,12 @@ uint32_t be32(const uint8_t* p) {
          (static_cast<uint32_t>(p[2]) << 8) | static_cast<uint32_t>(p[3]);
 }
 
-bool read_av2c_payload(MP4Media media, std::vector<uint8_t>& out_bytes) {
+bool read_av2c_payload(MP4Media media, uint32_t desc_index, std::vector<uint8_t>& out_bytes) {
   MP4Handle entry_h = nullptr;
   if (MP4NewHandle(0, &entry_h) != MP4NoErr || !entry_h) {
     spdlog::error("MP4NewHandle(sampleEntry) failed");
     return false;
   }
-  uint32_t desc_index = 1;
   if (MP4GetMediaSampleDescription(media, desc_index, entry_h, /*outIdx=*/nullptr) != MP4NoErr) {
     spdlog::error("MP4GetMediaSampleDescription({}) failed", desc_index);
     MP4DisposeHandle(entry_h);
@@ -154,21 +154,37 @@ bool Av2Demuxer::demux(const std::string& input_mp4, const std::string& output_o
     return false;
   }
 
-  std::vector<uint8_t> av2c_bytes;
-  if (!read_av2c_payload(media, av2c_bytes)) {
+  // Discover every stsd sample entry (one per CVS) by probing indices until failure;
+  // libisomedia has no MP4GetMediaSampleDescriptionCount API.
+  std::map<uint32_t, std::vector<uint8_t>> config_obus_map;
+  for (uint32_t desc_index = 1;; ++desc_index) {
+    MP4Handle probe_h = nullptr;
+    if (MP4NewHandle(0, &probe_h) != MP4NoErr || !probe_h) break;
+    MP4Err probe_err = MP4GetMediaSampleDescription(media, desc_index, probe_h, nullptr);
+    MP4DisposeHandle(probe_h);
+    if (probe_err != MP4NoErr) break;
+
+    std::vector<uint8_t> av2c_bytes;
+    if (!read_av2c_payload(media, desc_index, av2c_bytes)) {
+      MP4DisposeMovie(movie);
+      return false;
+    }
+    if (av2c_bytes.size() < kAv2CPrefixSize) {
+      spdlog::error("av2C payload too short ({} bytes, need >= {}) for desc_idx {}",
+                    av2c_bytes.size(), kAv2CPrefixSize, desc_index);
+      MP4DisposeMovie(movie);
+      return false;
+    }
+    config_obus_map[desc_index] =
+      std::vector<uint8_t>(av2c_bytes.begin() + kAv2CPrefixSize, av2c_bytes.end());
+    spdlog::debug("av2C desc_idx {}: {} configOBU bytes", desc_index,
+                  config_obus_map[desc_index].size());
+  }
+  if (config_obus_map.empty()) {
+    spdlog::error("No av2C sample descriptions found");
     MP4DisposeMovie(movie);
     return false;
   }
-  if (av2c_bytes.size() < kAv2CPrefixSize) {
-    spdlog::error("av2C payload too short ({} bytes, need >= {})", av2c_bytes.size(),
-                  kAv2CPrefixSize);
-    MP4DisposeMovie(movie);
-    return false;
-  }
-  const uint8_t* config_obus = av2c_bytes.data() + kAv2CPrefixSize;
-  size_t config_obus_size = av2c_bytes.size() - kAv2CPrefixSize;
-  spdlog::debug("av2C: {} payload bytes ({} prefix + {} configOBUs)", av2c_bytes.size(),
-                kAv2CPrefixSize, config_obus_size);
 
   uint32_t sample_count = 0;
   if (MP4GetMediaSampleCount(media, &sample_count) != MP4NoErr) {
@@ -185,7 +201,10 @@ bool Av2Demuxer::demux(const std::string& input_mp4, const std::string& output_o
     return false;
   }
 
-  // For every sample: emit a TD first, then (only for sample 1) the configOBUs, then the sample bytes. 
+  // For every sample: emit a TD first, then (only for sync samples) the configOBUs for that
+  // sample's desc_idx, then the sample bytes. AV2's SH is prohibited from appearing inside
+  // samples, so every sync sample must have configOBUs re-injected to stay independently
+  // decodable/seekable.
   MP4Handle sample_h = nullptr;
   if (MP4NewHandle(0, &sample_h) != MP4NoErr || !sample_h) {
     spdlog::error("MP4NewHandle(sample) failed");
@@ -194,6 +213,7 @@ bool Av2Demuxer::demux(const std::string& input_mp4, const std::string& output_o
   }
 
   uint64_t total_sample_bytes = 0;
+  uint64_t total_config_bytes = 0;
   uint32_t samples_with_td = 0;
   for (uint32_t i = 1; i <= sample_count; ++i) {
     u32 size = 0;
@@ -207,14 +227,30 @@ bool Av2Demuxer::demux(const std::string& input_mp4, const std::string& output_o
       MP4DisposeMovie(movie);
       return false;
     }
+    bool is_sync = !(flags & MP4MediaSampleNotSync);
+    const uint8_t* config_obus = nullptr;
+    size_t config_obus_size = 0;
+    if (is_sync) {
+      auto it = config_obus_map.find(desc_idx);
+      if (it == config_obus_map.end()) {
+        spdlog::error("Sample {} references desc_idx {} with no known av2C configOBUs", i,
+                      desc_idx);
+        MP4DisposeHandle(sample_h);
+        MP4DisposeMovie(movie);
+        return false;
+      }
+      config_obus = it->second.data();
+      config_obus_size = it->second.size();
+    }
+
     const uint8_t* sample_data = reinterpret_cast<const uint8_t*>(*sample_h);
     size_t td_prefix = leading_td_length(sample_data, size);
     if (td_prefix > 0) {
       // Sample already carries its own TD. Emit the TD that came from the bitstream.
-      // For sample 1 splice configOBUs in between the TD and the frame data.
+      // For a sync sample splice configOBUs in between the TD and the frame data.
       out.write(reinterpret_cast<const char*>(sample_data),
                 static_cast<std::streamsize>(td_prefix));
-      if (i == 1) {
+      if (is_sync) {
         out.write(reinterpret_cast<const char*>(config_obus),
                   static_cast<std::streamsize>(config_obus_size));
       }
@@ -224,7 +260,7 @@ bool Av2Demuxer::demux(const std::string& input_mp4, const std::string& output_o
     } else {
       // Sample has no TD (the default --drop-td muxing). Synthesize one.
       out.write(reinterpret_cast<const char*>(kTdBytes), sizeof(kTdBytes));
-      if (i == 1) {
+      if (is_sync) {
         out.write(reinterpret_cast<const char*>(config_obus),
                   static_cast<std::streamsize>(config_obus_size));
       }
@@ -232,15 +268,17 @@ bool Av2Demuxer::demux(const std::string& input_mp4, const std::string& output_o
                 static_cast<std::streamsize>(size));
     }
     total_sample_bytes += size;
+    total_config_bytes += config_obus_size;
   }
 
   MP4DisposeHandle(sample_h);
   MP4DisposeMovie(movie);
   out.close();
 
-  spdlog::info("Wrote {} ({} samples [{} carried a TD, {} got a synthesized TD], {} configOBU bytes)",
+  spdlog::info("Wrote {} ({} samples [{} carried a TD, {} got a synthesized TD], {} sample "
+               "entries, {} configOBU bytes total)",
                output_obu, sample_count, samples_with_td, sample_count - samples_with_td,
-               config_obus_size);
+               config_obus_map.size(), total_config_bytes);
   return true;
 }
 

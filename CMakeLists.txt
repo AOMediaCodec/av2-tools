@@ -180,6 +180,13 @@ if(BUILD_CONTAINER_TOOLS)
     GIT_SHALLOW    FALSE  # Disable shallow clone for branch
     GIT_SUBMODULES ""     # Don't initialize any submodules during fetch
     UPDATE_DISCONNECTED TRUE  # Don't update on every build
+    # Fix off-by-one in SampleToChunkAtom::lookupSample(): the boundary sample of a
+    # stsc run (e.g. the first sync sample of a new CVS) is misattributed to the
+    # previous run's sample description index, corrupting av2C config-OBU reinjection
+    # on demux for multi-CVS streams.
+    PATCH_COMMAND sed -i.bak
+      "s/if(sampleNumber <= (firstSampleThisChunkRun + samplesThisChunkRun))/if(sampleNumber < (firstSampleThisChunkRun + samplesThisChunkRun))/"
+      IsoLib/libisomediafile/src/SampleToChunkAtom.c
   )
 
   # Configure isobmff to build library only (no submodules, no examples)

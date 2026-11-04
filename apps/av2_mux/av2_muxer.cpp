@@ -14,7 +14,6 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <map>
 #include <vector>
 
 #include <spdlog/fmt/fmt.h>
@@ -80,7 +79,7 @@ bool Av2Muxer::package(const OBUParser& parser, const std::string& output_path) 
   uint32_t sync_samples = 0;
   for (uint32_t i = strategy_.start_tu; i < end_tu; ++i) {
     int32_t ctts = need_ctts ? ctts_offsets[i - strategy_.start_tu] : 0;
-    if (!write_tu(tus[i], ctts)) {
+    if (!write_tu(tus[i], i, ctts)) {
       MUX_ERROR("Failed to write TU {}", i);
       return false;
     }
@@ -103,15 +102,28 @@ bool Av2Muxer::package(const OBUParser& parser, const std::string& output_path) 
   return true;
 }
 
+namespace {
+
+std::vector<uint8_t> read_obu_bytes(std::ifstream& ifs, const BaseOBU& o) {
+  const auto& pos = o.position();
+  size_t total = pos.size_field_len + pos.header_len + pos.payload_size;
+  std::vector<uint8_t> b(total);
+  ifs.clear();
+  ifs.seekg(pos.start_pos);
+  ifs.read(reinterpret_cast<char*>(b.data()), static_cast<std::streamsize>(total));
+  ifs.clear();
+  return b;
+}
+
+}  // namespace
+
 bool Av2Muxer::setup_video_track(const OBUParser& parser) {
-  const SequenceHeaderOBU* first_sh = find_first_sequence_header(parser);
-  if (!first_sh) {
-    MUX_ERROR("No Sequence Header OBU found");
+  if (parser.temporal_units().empty()) {
+    MUX_ERROR("No temporal units found");
     return false;
   }
-  const AV2SequenceHeader& sh = first_sh->sequence_header();
 
-  // All extended layers of a temporal unit share the same timing info
+  // All extended layers of a temporal unit share the same timing info.
   // The base layer's frames can drive the CTS computation.
   base_xlayer_id_ = GLOBAL_XLAYER_ID;
   for (const auto& o : parser.obus()) {
@@ -121,105 +133,114 @@ bool Av2Muxer::setup_video_track(const OBUParser& parser) {
     if (base_xlayer_id_ == GLOBAL_XLAYER_ID || x < base_xlayer_id_) base_xlayer_id_ = x;
   }
 
-  strategy_.any_non_monotonic = (sh.monotonic_output_order_flag == 0);
-  if (strategy_.any_non_monotonic) {
-    if (!check_doh_lifter_supported(parser)) return false;
-    doh_lifter_ = std::make_unique<DisplayOrderLifter>(sh.inter_config.OrderHintBits);
-  }
+  const auto& tus = parser.temporal_units();
+  tu_desc_idx_.assign(tus.size(), 0);
 
-  AV2CodecConfigurationBox av2c(input_ifs_);
-  av2c.set_from_sequence_header(sh);
+  std::vector<uint8_t> last_config_bytes;
+  uint32_t active_desc_idx = 0;
 
-  auto read_obu_bytes = [&](const BaseOBU& o) {
-    const auto& pos = o.position();
-    size_t total = pos.size_field_len + pos.header_len + pos.payload_size;
-    std::vector<uint8_t> b(total);
-    input_ifs_.clear();
-    input_ifs_.seekg(pos.start_pos);
-    input_ifs_.read(reinterpret_cast<char*>(b.data()), static_cast<std::streamsize>(total));
-    input_ifs_.clear();
-    return b;
-  };
+  for (uint32_t i = 0; i < tus.size(); ++i) {
+    if (!tus[i].is_sync_sample()) {
+      tu_desc_idx_[i] = active_desc_idx;
+      continue;
+    }
 
-  // Collect config OBUs in bitstream order from the first TU SHs, LCR, OPS, CI.
-  // If encoder interleaves a frame OBU between config OBUs, that frame simply lands sample
-  if (parser.temporal_units().empty()) {
-    MUX_ERROR("No temporal units found");
-    return false;
-  }
-  std::map<std::pair<int, uint32_t>, std::vector<uint8_t>> config_bytes;
-  size_t config_count = 0, sh_count = 0;
-  for (const BaseOBU* p : parser.temporal_units().front()) {
-    if (!is_config_obu(p->type())) continue;
-    config_bytes[{static_cast<int>(p->type()), p->header().get_xlayer_id()}] = read_obu_bytes(*p);
-    if (p->type() == OBUType::SEQUENCE_HEADER) ++sh_count;
-    ++config_count;
-    if (!av2c.append_config_obu(*p)) {
-      MUX_ERROR("Failed to append config OBU (type {}) to av2C configOBUs",
-                static_cast<int>(p->type()));
+    AV2CodecConfigurationBox av2c(input_ifs_);
+    std::vector<uint8_t> config_bytes;
+    const SequenceHeaderOBU* sh = nullptr;
+    size_t config_count = 0;
+
+    for (const BaseOBU* p : tus[i]) {
+      if (!is_config_obu(p->type())) continue;
+      if (p->type() == OBUType::SEQUENCE_HEADER && !sh) {
+        sh = dynamic_cast<const SequenceHeaderOBU*>(p);
+      }
+      auto raw = read_obu_bytes(input_ifs_, *p);
+      config_bytes.insert(config_bytes.end(), raw.begin(), raw.end());
+      ++config_count;
+      if (!av2c.append_config_obu(*p)) {
+        MUX_ERROR("Failed to append config OBU (type {}) to av2C configOBUs",
+                  static_cast<int>(p->type()));
+        return false;
+      }
+    }
+
+    if (!sh) {
+      MUX_ERROR("Sync sample TU {} has no Sequence Header OBU", i);
       return false;
     }
-  }
+    const AV2SequenceHeader& sequence_header = sh->sequence_header();
+    av2c.set_from_sequence_header(sequence_header);
 
-  // Config OBUs live only in the sample entry. If a later occurrence differs,
-  // we would need multiple SE which is not yet implemented.
-  for (const auto& obu_ptr : parser.obus()) {
-    const BaseOBU* p = obu_ptr.get();
-    if (!is_config_obu(p->type())) continue;
-    auto it = config_bytes.find({static_cast<int>(p->type()), p->header().get_xlayer_id()});
-    if (it == config_bytes.end() || read_obu_bytes(*p) != it->second) {
-      config_changes_over_time_ = true;
-      break;
+    if (!config_bytes.empty() && config_bytes == last_config_bytes) {
+      tu_desc_idx_[i] = active_desc_idx;
+      continue;
     }
+    last_config_bytes = config_bytes;
+
+    std::optional<ColrInfo> colr =
+      strategy_.colr_override ? strategy_.colr_override : extract_colr_info_from_tu(tus[i]);
+
+    uint32_t w_full = static_cast<uint32_t>(sequence_header.max_frame_width_minus_1) + 1;
+    uint32_t h_full = static_cast<uint32_t>(sequence_header.max_frame_height_minus_1) + 1;
+    if (w_full > 0xFFFF || h_full > 0xFFFF) {
+      MUX_WARN("Frame dimensions {}x{} exceed 16-bit av2C field; truncating", w_full, h_full);
+    }
+    uint16_t width = static_cast<uint16_t>(w_full & 0xFFFF);
+    uint16_t height = static_cast<uint16_t>(h_full & 0xFFFF);
+
+    uint32_t new_desc_idx;
+    if (sample_entries_.empty()) {
+      strategy_.any_non_monotonic = (sequence_header.monotonic_output_order_flag == 0);
+      if (strategy_.any_non_monotonic) {
+        if (!check_doh_lifter_supported(parser)) return false;
+        doh_lifter_ =
+          std::make_unique<DisplayOrderLifter>(sequence_header.inter_config.OrderHintBits);
+      }
+
+      if (!writer_.add_video_track(strategy_.timescale, width, height, av2c)) return false;
+      writer_.set_samples_per_chunk(strategy_.samples_per_chunk);
+      if (colr && !writer_.add_colr_nclx(*colr)) return false;
+      new_desc_idx = 1;
+    } else {
+      new_desc_idx = writer_.add_sample_entry(av2c, width, height, colr);
+      if (new_desc_idx == 0) return false;
+      MUX_INFO("CVS boundary at TU {}: new sample entry (desc_idx={})", i, new_desc_idx);
+    }
+
+    MUX_DEBUG("configOBUs (desc_idx={}): {} OBU(s)", new_desc_idx, config_count);
+    if (colr) {
+      MUX_DEBUG("colr/nclx ({}): cp={} tc={} mc={} full_range={}",
+                strategy_.colr_override ? "override" : "extracted from bitstream",
+                colr->colour_primaries, colr->transfer_characteristics, colr->matrix_coefficients,
+                colr->full_range_flag);
+    } else {
+      MUX_DEBUG("No CI/LCR/OPS color info found and no --colr-override; omitting colr box");
+    }
+    last_colr_ = colr;
+
+    sample_entries_.push_back({av2c, colr, new_desc_idx, config_bytes});
+    active_desc_idx = new_desc_idx;
+    tu_desc_idx_[i] = active_desc_idx;
   }
 
-  if (config_changes_over_time_) {
-    MUX_WARN(
-      "Configuration OBUs change over the course of the track. Multi-sample-entry support is not yet "
-      "implemented; only the first temporal unit's configuration is carried in av2C. Samples that "
-      "depend on later configuration may decode incorrectly.");
+  if (sample_entries_.empty()) {
+    MUX_ERROR("No sync sample found in stream");
+    return false;
   }
-  MUX_DEBUG("configOBUs: {} OBU(s) ({} sequence header(s))", config_count, sh_count);
 
-  uint32_t w_full = static_cast<uint32_t>(sh.max_frame_width_minus_1) + 1;
-  uint32_t h_full = static_cast<uint32_t>(sh.max_frame_height_minus_1) + 1;
-  if (w_full > 0xFFFF || h_full > 0xFFFF) {
-    MUX_WARN("Frame dimensions {}x{} exceed 16-bit av2C field; truncating", w_full, h_full);
+  if (sample_entries_.size() > 1) {
+    MUX_DEBUG("Multi-CVS stream: {} sample entries", sample_entries_.size());
+    check_cmaf_invariants(sample_entries_);
   }
-  uint16_t width = static_cast<uint16_t>(w_full & 0xFFFF);
-  uint16_t height = static_cast<uint16_t>(h_full & 0xFFFF);
-
-  if (!writer_.add_video_track(strategy_.timescale, width, height, av2c)) return false;
-  writer_.set_samples_per_chunk(strategy_.samples_per_chunk);
-
-  std::optional<ColrInfo> colr =
-    strategy_.colr_override ? strategy_.colr_override : extract_colr_info(parser);
-  if (colr) {
-    if (!writer_.add_colr_nclx(*colr)) return false;
-    MUX_DEBUG("colr/nclx ({}): cp={} tc={} mc={} full_range={}",
-              strategy_.colr_override ? "override" : "extracted from bitstream",
-              colr->colour_primaries, colr->transfer_characteristics, colr->matrix_coefficients,
-              colr->full_range_flag);
-  } else {
-    MUX_DEBUG("No CI/LCR/OPS color info found and no --colr-override; omitting colr box");
-  }
-  last_colr_ = colr;
 
   return true;
 }
 
 bool Av2Muxer::check_doh_lifter_supported(const OBUParser& parser) {
-  // For multi-layer streams the lifter runs on the base extended layer only
-  uint32_t clk_count = 0;
-  for (const auto& obu : parser.obus()) {
-    if (obu->header().get_xlayer_id() != base_xlayer_id_) continue;
-    if (obu->type() == OBUType::CLK) ++clk_count;
-  }
-  if (clk_count > 1) {
-    MUX_ERROR("Non-monotonic stream: base xlayer has {} CLK frames (multi-CVS); the v1 DOH "
-              "lifter does not reset across CVS boundaries.", clk_count);
-    return false;
-  }
+  // For multi-layer streams the lifter runs on the base extended layer only.
+  // Multi-CVS non-monotonic streams are supported: the lifter is reset at each
+  // CVS boundary (see compute_composition_offsets()).
   for (const auto& obu : parser.obus()) {
     if (obu->header().get_xlayer_id() != base_xlayer_id_) continue;
     if (obu->type() == OBUType::BRIDGE_FRAME) {
@@ -242,11 +263,12 @@ bool Av2Muxer::check_doh_lifter_supported(const OBUParser& parser) {
   return true;
 }
 
-bool Av2Muxer::write_tu(const TemporalUnit& tu, int32_t composition_offset) {
+bool Av2Muxer::write_tu(const TemporalUnit& tu, uint32_t tu_index, int32_t composition_offset) {
   std::vector<uint8_t> bytes;
   if (!assemble_sample_bytes(tu, bytes)) return false;
+  uint32_t desc_idx = tu_desc_idx_[tu_index];
   return writer_.add_sample(bytes, strategy_.default_sample_duration, tu.is_sync_sample(),
-                            composition_offset);
+                            composition_offset, desc_idx);
 }
 
 std::vector<int32_t> Av2Muxer::compute_composition_offsets(
@@ -256,18 +278,27 @@ std::vector<int32_t> Av2Muxer::compute_composition_offsets(
   offsets.reserve(end - start);
   const int64_t dur = static_cast<int64_t>(strategy_.default_sample_duration);
   const SequenceHeaderOBU* first_sh = find_first_sequence_header(parser);
-  const AV2SequenceHeader& sh = first_sh->sequence_header();
+  const AV2SequenceHeader* sh = &first_sh->sequence_header();
 
   for (uint32_t i = start; i < end; ++i) {
     int32_t off = 0;
     int64_t output_doh = -1;
+
+    if (tus[i].is_sync_sample() && i > start) {
+      if (const SequenceHeaderOBU* cvs_sh = find_sh_in_tu(tus[i], base_xlayer_id_)) {
+        doh_lifter_ =
+          std::make_unique<DisplayOrderLifter>(cvs_sh->sequence_header().inter_config.OrderHintBits);
+        ref_buffer_ = RefFrameBuffer{};
+        sh = &cvs_sh->sequence_header();
+      }
+    }
 
     // Feed only the base extended layer's frames to the lifter (sample has shared timing for all layers)
     for (const auto* obu : tus[i].obus()) {
       if (obu->header().get_xlayer_id() != base_xlayer_id_) continue;
       const FrameHeaderInfo* fh = frame_header_of(obu);
       if (!fh) continue;
-      const int64_t doh = doh_lifter_->process(*obu, *fh, sh, ref_buffer_);
+      const int64_t doh = doh_lifter_->process(*obu, *fh, *sh, ref_buffer_);
       if (fh->is_output_frame) output_doh = doh;
     }
 
@@ -310,6 +341,57 @@ const SequenceHeaderOBU* Av2Muxer::find_first_sequence_header(const OBUParser& p
     }
   }
   return nullptr;
+}
+
+const SequenceHeaderOBU* Av2Muxer::find_sh_in_tu(const TemporalUnit& tu, uint32_t xlayer_id) {
+  for (const BaseOBU* obu : tu.obus()) {
+    if (obu->type() != OBUType::SEQUENCE_HEADER) continue;
+    if (obu->header().get_xlayer_id() != xlayer_id) continue;
+    if (auto* sh = dynamic_cast<const SequenceHeaderOBU*>(obu)) return sh;
+  }
+  return nullptr;
+}
+
+void Av2Muxer::check_cmaf_invariants(const std::vector<SampleEntryRecord>& entries) {
+  const auto& first = entries.front().av2c;
+  bool color_warned = false;
+  for (size_t i = 1; i < entries.size(); ++i) {
+    const auto& e = entries[i].av2c;
+    if (e.seq_profile_idc != first.seq_profile_idc) {
+      MUX_WARN("Sample entry {} has seq_profile_idc={} (first={}); players may not support "
+               "switching profiles mid-stream.",
+               i, e.seq_profile_idc, first.seq_profile_idc);
+    }
+    if (e.still_picture != first.still_picture) {
+      MUX_WARN("Sample entry {} has still_picture={} (first={})", i, e.still_picture,
+                first.still_picture);
+    }
+    if (e.seq_level_idx != first.seq_level_idx) {
+      MUX_WARN("Sample entry {} has seq_level_idx={} (first={})", i, e.seq_level_idx,
+                first.seq_level_idx);
+    }
+    if (e.seq_tier != first.seq_tier) {
+      MUX_WARN("Sample entry {} has seq_tier={} (first={})", i, e.seq_tier, first.seq_tier);
+    }
+    if (e.seq_initial_display_delay_minus_1 != first.seq_initial_display_delay_minus_1) {
+      MUX_WARN("Sample entry {} has seq_initial_display_delay_minus_1={} (first={})", i,
+                e.seq_initial_display_delay_minus_1, first.seq_initial_display_delay_minus_1);
+    }
+    if (!color_warned && entries[i].colr.has_value() != entries.front().colr.has_value()) {
+      MUX_WARN("Sample entry {} colr presence differs from first sample entry", i);
+      color_warned = true;
+    } else if (!color_warned && entries[i].colr && entries.front().colr) {
+      const auto& c0 = *entries.front().colr;
+      const auto& ci = *entries[i].colr;
+      if (c0.colour_primaries != ci.colour_primaries ||
+          c0.transfer_characteristics != ci.transfer_characteristics ||
+          c0.matrix_coefficients != ci.matrix_coefficients ||
+          c0.full_range_flag != ci.full_range_flag) {
+        MUX_WARN("Sample entry {} colr/nclx differs from first sample entry", i);
+        color_warned = true;
+      }
+    }
+  }
 }
 
 void log_stream_summary(const OBUParser& parser) {
