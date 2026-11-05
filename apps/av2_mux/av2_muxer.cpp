@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <set>
 #include <vector>
 
 #include "av2_codec_config.h"
@@ -28,6 +29,8 @@
 #include <av2_obu/core/temporal_unit.h>
 #include <av2_obu/obus/atlas_segment_obu.h>
 #include <av2_obu/obus/content_interpretation_obu.h>
+#include <av2_obu/obus/layer_configuration_record_obu.h>
+#include <av2_obu/obus/msdo_obu.h>
 #include <av2_obu/obus/sequence_header_obu.h>
 
 namespace av2_obu {
@@ -141,6 +144,127 @@ bool Av2Muxer::setup_video_track(const OBUParser& parser) {
   std::vector<uint8_t> last_config_bytes;
   uint32_t active_desc_idx = 0;
 
+  bool has_atlas_dims = false;
+  bool atlas_dims_change_over_time = false;
+  uint32_t max_atlas_w = 0;
+  uint32_t max_atlas_h = 0;
+  std::pair<uint32_t, uint32_t> prev_atlas_dims{0, 0};
+
+  const MSDOOBU* active_msdo = nullptr;
+  std::vector<const LayerConfigurationRecordOBU*> active_lcrs;
+
+  auto matches_msdo = [](const AtlasSegmentOBU* atlas, const MSDOOBU* msdo) {
+    if (!atlas || !msdo || atlas->header().get_xlayer_id() != GLOBAL_XLAYER_ID)
+      return false;
+    const auto mode = atlas->mode_idc();
+    const bool has_stream_ids =
+      (mode == AtlasSegmentOBU::ModeIdc::MULTISTREAM_ATLAS ||
+       mode == AtlasSegmentOBU::ModeIdc::MULTISTREAM_ALPHA_ATLAS ||
+       (mode == AtlasSegmentOBU::ModeIdc::BASIC_ATLAS && atlas->basic_stream_id_present()));
+    if (!has_stream_ids || atlas->segments().empty())
+      return false;
+    std::set<uint32_t> msdo_xlayers;
+    for (const auto& s : msdo->streams()) {
+      msdo_xlayers.insert(s.sub_xlayer_id);
+    }
+    if (msdo_xlayers.empty())
+      return false;
+    for (const auto& seg : atlas->segments()) {
+      if (msdo_xlayers.find(seg.input_stream_id) == msdo_xlayers.end())
+        return false;
+    }
+    return true;
+  };
+
+  auto matches_lcr = [](const AtlasSegmentOBU* atlas,
+                        const std::vector<const LayerConfigurationRecordOBU*>& lcrs) {
+    if (!atlas)
+      return false;
+    for (const auto* lcr : lcrs) {
+      if (!lcr)
+        continue;
+      if (lcr->is_global() && lcr->has_global_atlas_id() &&
+          atlas->atlas_segment_id() == lcr->global_atlas_id()) {
+        return true;
+      }
+      if (!lcr->is_global() && lcr->has_local_atlas_id() &&
+          atlas->atlas_segment_id() == lcr->local_atlas_id()) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  for (const auto& tu : tus) {
+    const MSDOOBU* tu_msdo = nullptr;
+    std::vector<const LayerConfigurationRecordOBU*> tu_lcrs;
+    std::vector<const AtlasSegmentOBU*> tu_atlases;
+
+    for (const BaseOBU* p : tu) {
+      if (p->type() == OBUType::MSDO) {
+        if (const auto* msdo = dynamic_cast<const MSDOOBU*>(p))
+          tu_msdo = msdo;
+      } else if (p->type() == OBUType::LAYER_CONFIGURATION_RECORD) {
+        if (const auto* lcr = dynamic_cast<const LayerConfigurationRecordOBU*>(p)) {
+          tu_lcrs.push_back(lcr);
+        }
+      } else if (p->type() == OBUType::ATLAS_SEGMENT) {
+        if (const auto* atlas = dynamic_cast<const AtlasSegmentOBU*>(p)) {
+          tu_atlases.push_back(atlas);
+        }
+      }
+    }
+
+    if (tu_msdo)
+      active_msdo = tu_msdo;
+    if (!tu_lcrs.empty())
+      active_lcrs = tu_lcrs;
+
+    if (tu_atlases.empty())
+      continue;
+
+    const MSDOOBU* msdo = tu_msdo ? tu_msdo : active_msdo;
+    const auto& lcrs = !tu_lcrs.empty() ? tu_lcrs : active_lcrs;
+    if (!msdo && lcrs.empty())
+      continue;
+
+    const AtlasSegmentOBU* selected_atlas = nullptr;
+    for (const auto* atlas : tu_atlases) {
+      if ((msdo && matches_msdo(atlas, msdo)) || (!lcrs.empty() && matches_lcr(atlas, lcrs))) {
+        selected_atlas = atlas;
+        break;
+      }
+    }
+    // Fallback when MSDO or LCR is present and only one ATLAS_SEGMENT exists in the TU.
+    if (!selected_atlas && tu_atlases.size() == 1) {
+      selected_atlas = tu_atlases.front();
+    }
+
+    if (selected_atlas) {
+      if (auto dims = selected_atlas->canvas_dimensions()) {
+        if (!has_atlas_dims) {
+          has_atlas_dims = true;
+          prev_atlas_dims = *dims;
+          max_atlas_w = dims->first;
+          max_atlas_h = dims->second;
+        } else {
+          if (*dims != prev_atlas_dims) {
+            atlas_dims_change_over_time = true;
+            prev_atlas_dims = *dims;
+          }
+          max_atlas_w = std::max(max_atlas_w, dims->first);
+          max_atlas_h = std::max(max_atlas_h, dims->second);
+        }
+      }
+    }
+  }
+
+  if (atlas_dims_change_over_time) {
+    MUX_WARN("Atlas canvas dimensions change over the course of the track; using maximum canvas "
+             "dimensions {}x{} for track header and sample entry.",
+             max_atlas_w, max_atlas_h);
+  }
+
   for (uint32_t i = 0; i < tus.size(); ++i) {
     if (!tus[i].is_sync_sample()) {
       tu_desc_idx_[i] = active_desc_idx;
@@ -185,16 +309,9 @@ bool Av2Muxer::setup_video_track(const OBUParser& parser) {
 
     uint32_t w_full = static_cast<uint32_t>(sequence_header.max_frame_width_minus_1) + 1;
     uint32_t h_full = static_cast<uint32_t>(sequence_header.max_frame_height_minus_1) + 1;
-    for (const BaseOBU* p : tus[i]) {
-      if (p->type() != OBUType::ATLAS_SEGMENT)
-        continue;
-      if (const auto* atlas = dynamic_cast<const AtlasSegmentOBU*>(p)) {
-        if (auto dims = atlas->canvas_dimensions()) {
-          w_full = dims->first;
-          h_full = dims->second;
-          break;
-        }
-      }
+    if (has_atlas_dims) {
+      w_full = max_atlas_w;
+      h_full = max_atlas_h;
     }
     if (w_full > 0xFFFF || h_full > 0xFFFF) {
       MUX_WARN("Frame dimensions {}x{} exceed 16-bit av2C field; truncating", w_full, h_full);

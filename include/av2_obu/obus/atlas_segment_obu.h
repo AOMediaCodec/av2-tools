@@ -70,6 +70,11 @@ public:
   // Returns the composed atlas canvas (width, height) when parsed and non-zero.
   std::optional<std::pair<uint32_t, uint32_t>> canvas_dimensions() const;
 
+  uint32_t atlas_segment_id() const { return atlas_segment_id_; }
+  ModeIdc mode_idc() const { return mode_idc_; }
+  bool basic_stream_id_present() const { return basic_stream_id_present_ != 0; }
+  const std::vector<Segment>& segments() const { return segments_; }
+
 protected:
   bool parse_payload(std::ifstream& ifs) override;
 
