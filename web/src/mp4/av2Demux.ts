@@ -12,8 +12,10 @@
 
 import { createFile } from 'mp4box';
 
-// av2C payload layout (per av2-isobmff): a 9-byte prefix followed by configOBUs.
-const AV2C_PREFIX_LEN = 9;
+// OutOfBandAV2CodecConfigurationBox ('av2C') payload layout (per av2-isobmff):
+// a 2-byte prefix (reserved1, config_obus_count_minus1) followed by config_obu[].
+const AV2C_PREFIX_LEN = 2;
+const AV2_SAMPLE_ENTRY_TYPES = new Set(['av2E', 'av2e']);
 // VisualSampleEntry fixed fields preceding the child boxes (matches the C++
 // kVisualSampleEntryFixedSize): 8-byte box header + 78 bytes.
 const SAMPLE_ENTRY_HEADER_LEN = 8 + 78;
@@ -46,8 +48,9 @@ function findChild(
   return null;
 }
 
-// Walk one trak's mdia > minf > stbl > stsd > av02 > av2C; return the
-// configOBUs (av2C payload minus the 9-byte prefix), or null if not an AV2 track.
+// Walk one trak's mdia > minf > stbl > stsd > av2E/av2e > av2C/av2c; return the
+// configOBUs (av2C payload minus the 2-byte prefix, or empty Uint8Array for in-band av2c),
+// or null if not an AV2 track.
 function configObusFromTrak(d: Uint8Array, start: number, end: number): Uint8Array | null {
   let node = findChild(d, start, end, 'mdia');
   if (!node) return null;
@@ -59,15 +62,38 @@ function configObusFromTrak(d: Uint8Array, start: number, end: number): Uint8Arr
   if (!stsd) return null;
   // stsd is a FullBox: 8-byte header + 4 (version/flags) + 4 (entry_count).
   const seStart = stsd[0] + 16;
-  if (seStart + 8 > stsd[1] || fourCC(d, seStart + 4) !== 'av02') return null;
+  if (seStart + 8 > stsd[1]) return null;
+  const seType = fourCC(d, seStart + 4);
+  if (!AV2_SAMPLE_ENTRY_TYPES.has(seType)) return null;
   const seEnd = Math.min(seStart + u32(d, seStart), stsd[1]);
+  if (seType === 'av2e') {
+    const av2cInband = findChild(d, seStart + SAMPLE_ENTRY_HEADER_LEN, seEnd, 'av2c');
+    return av2cInband && av2cInband[1] - (av2cInband[0] + 8) >= 2 ? new Uint8Array(0) : null;
+  }
   const av2c = findChild(d, seStart + SAMPLE_ENTRY_HEADER_LEN, seEnd, 'av2C');
   if (!av2c) return null;
   const payload = d.subarray(av2c[0] + 8, av2c[1]);
-  return payload.length >= AV2C_PREFIX_LEN ? payload.subarray(AV2C_PREFIX_LEN) : null;
+  if (payload.length < AV2C_PREFIX_LEN) return null;
+  const expectedCount = payload[1] + 1;
+  let off = AV2C_PREFIX_LEN;
+  for (let n = 0; n < expectedCount; n++) {
+    let i = off;
+    let obuSize = 0;
+    let shift = 0;
+    while (i < payload.length && i - off < 8) {
+      const b = payload[i++];
+      obuSize |= (b & 0x7f) << shift;
+      if (!(b & 0x80)) break;
+      shift += 7;
+    }
+    if (obuSize === 0 || i + obuSize > payload.length) return null;
+    off = i + obuSize;
+  }
+  // Ignore any unrecognized trailing bytes after expectedCount config OBUs per ISOBMFF.
+  return payload.subarray(AV2C_PREFIX_LEN, off);
 }
 
-// Find the av2C configOBUs of the first AV2 (av02) track in the file.
+// Find the av2C configOBUs of the first AV2 ('av2E' or 'av2e') track in the file.
 function extractConfigObus(d: Uint8Array): Uint8Array | null {
   const moov = findChild(d, 0, d.length, 'moov');
   if (!moov) return null;
@@ -146,7 +172,7 @@ export function demuxMp4ToObu(data: Uint8Array): Promise<Uint8Array> {
   const configObus = extractConfigObus(data);
   if (!configObus) {
     return Promise.reject(
-      new Error("no AV2 sample entry ('av02' with 'av2C') found in this file"),
+      new Error("no AV2 sample entry ('av2E' or 'av2e') found in this file"),
     );
   }
 
@@ -167,10 +193,12 @@ export function demuxMp4ToObu(data: Uint8Array): Promise<Uint8Array> {
 
     mp4.onReady = (info: any) => {
       const track = (info.tracks || []).find(
-        (t: any) => typeof t.codec === 'string' && t.codec.startsWith('av02'),
+        (t: any) =>
+          typeof t.codec === 'string' &&
+          (t.codec.startsWith('av2E') || t.codec.startsWith('av2e')),
       );
       if (!track) {
-        fail("no 'av02' (AV2) video track found in this file");
+        fail("no AV2 ('av2E' or 'av2e') video track found in this file");
         return;
       }
       expected = track.nb_samples;
