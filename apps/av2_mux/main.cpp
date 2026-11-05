@@ -66,11 +66,16 @@ int main(int argc, char** argv) {
     "'cp:tc:mc:fr' tuple where cp=ColourPrimaries, tc=TransferCharacteristics, "
     "mc=MatrixCoefficients, fr=VideoFullRangeFlag (0=video range, 1=full range).";
   app.add_option("--colr-override", opts.colr_override, colr_help);
+  app.add_flag("--fragmented", opts.fragmented,
+               "Emit fragmented MP4 (empty moov + moof/mdat fragments split at sync samples)");
+  app.add_option("--fragment-duration", opts.fragment_duration_ms,
+                 "Target fragment duration in ms (implies --fragmented; 0 = split at sync samples)");
   app.add_flag("-v,--verbose", verbose, "Enable verbose/debug logging");
 
   CLI11_PARSE(app, argc, argv);
   setup_logging(verbose);
   opts.frame_rate_explicit = (fps_opt->count() > 0);
+  if (opts.fragment_duration_ms > 0) opts.fragmented = true;
   opts.drop_temporal_delimiters = !keep_td;
   if (keep_td) {
     MUX_WARN(

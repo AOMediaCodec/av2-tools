@@ -54,6 +54,116 @@ size_t leading_td_length(const uint8_t* p, size_t n) {
   return i + static_cast<size_t>(obu_size);
 }
 
+struct ObuSpan {
+  const uint8_t* data = nullptr;
+  size_t size = 0;
+  uint32_t obu_type = 0;
+  uint32_t xlayer_id = 0;
+};
+
+bool parse_annexb_obus(const uint8_t* buf, size_t len, std::vector<ObuSpan>& out) {
+  out.clear();
+  size_t pos = 0;
+  while (pos < len) {
+    size_t start = pos;
+    uint64_t obu_size = 0;
+    uint32_t shift = 0;
+    size_t leb_bytes = 0;
+    while (pos < len && leb_bytes < 8) {
+      uint8_t b = buf[pos++];
+      ++leb_bytes;
+      obu_size |= static_cast<uint64_t>(b & 0x7F) << shift;
+      if (!(b & 0x80)) break;
+      shift += 7;
+    }
+    if (obu_size == 0 || pos + obu_size > len) return false;
+    uint8_t h0 = buf[pos];
+    uint32_t ext_flag = (h0 >> 7) & 0x1;
+    uint32_t obu_type = (h0 >> 2) & 0x1F;
+    uint32_t xlayer_id = (obu_type == 2 || obu_type == 20) ? 31 : 0;
+    if (ext_flag && obu_size >= 2) {
+      xlayer_id = buf[pos + 1] & 0x1F;
+    }
+    size_t total = (pos - start) + static_cast<size_t>(obu_size);
+    out.push_back(ObuSpan{buf + start, total, obu_type, xlayer_id});
+    pos += static_cast<size_t>(obu_size);
+  }
+  return true;
+}
+
+// Re-inject configOBUs into a sync sample's body while preserving AV2 Temporal Unit OBU order:
+//   1. Global phase (xlayer_id == 31): MSDO -> global LCR/OPS -> global ATLAS_SEGMENT/METADATA
+//   2. Per-xlayer phase (xlayer_id 0..30 in ascending order):
+//      local LCR/OPS -> local ATLAS_SEGMENT -> SH -> CI -> frame unit OBUs
+void write_sync_sample_with_config_obus(std::ofstream& out, const uint8_t* config_obus,
+                                        size_t config_obus_size, const uint8_t* body_data,
+                                        size_t body_size) {
+  std::vector<ObuSpan> cfg_spans, body_spans;
+  if (!parse_annexb_obus(config_obus, config_obus_size, cfg_spans) ||
+      !parse_annexb_obus(body_data, body_size, body_spans)) {
+    // Fallback to simple prefix write if Annex-B framing cannot be parsed.
+    out.write(reinterpret_cast<const char*>(config_obus),
+              static_cast<std::streamsize>(config_obus_size));
+    out.write(reinterpret_cast<const char*>(body_data),
+              static_cast<std::streamsize>(body_size));
+    return;
+  }
+
+  std::vector<bool> cfg_emitted(cfg_spans.size(), false);
+  auto emit_cfg = [&](size_t idx) {
+    if (!cfg_emitted[idx]) {
+      out.write(reinterpret_cast<const char*>(cfg_spans[idx].data),
+                static_cast<std::streamsize>(cfg_spans[idx].size));
+      cfg_emitted[idx] = true;
+    }
+  };
+
+  size_t b_idx = 0;
+  // 1. Emit leading MSDO (type 20) from sample body if present.
+  while (b_idx < body_spans.size() && body_spans[b_idx].xlayer_id == 31 &&
+         body_spans[b_idx].obu_type == 20) {
+    out.write(reinterpret_cast<const char*>(body_spans[b_idx].data),
+              static_cast<std::streamsize>(body_spans[b_idx].size));
+    ++b_idx;
+  }
+  // 2. Emit global config OBUs (xlayer_id == 31) that precede ATLAS_SEGMENT (LCR=16, OPS=18).
+  for (size_t c = 0; c < cfg_spans.size(); ++c) {
+    if (cfg_spans[c].xlayer_id == 31) emit_cfg(c);
+  }
+  // 3. Emit remaining leading global OBUs (xlayer_id == 31, e.g. ATLAS_SEGMENT=17, METADATA=8/9).
+  while (b_idx < body_spans.size() && body_spans[b_idx].xlayer_id == 31) {
+    out.write(reinterpret_cast<const char*>(body_spans[b_idx].data),
+              static_cast<std::streamsize>(body_spans[b_idx].size));
+    ++b_idx;
+  }
+
+  // 4. Walk remaining sample body OBUs in ascending xlayer_id order.
+  for (; b_idx < body_spans.size(); ++b_idx) {
+    const auto& b = body_spans[b_idx];
+    if (b.xlayer_id < 31) {
+      for (size_t c = 0; c < cfg_spans.size(); ++c) {
+        if (cfg_emitted[c] || cfg_spans[c].xlayer_id == 31) continue;
+        if (cfg_spans[c].xlayer_id < b.xlayer_id) {
+          emit_cfg(c);
+        } else if (cfg_spans[c].xlayer_id == b.xlayer_id) {
+          // Within the same xlayer_id: LCR (16) and OPS (18) precede local ATLAS_SEGMENT (17),
+          // while SH (1) and CI (24) follow local ATLAS_SEGMENT (17) and precede frame unit OBUs.
+          if (b.obu_type == 17 && (cfg_spans[c].obu_type == 1 || cfg_spans[c].obu_type == 24)) {
+            continue;
+          }
+          emit_cfg(c);
+        }
+      }
+    }
+    out.write(reinterpret_cast<const char*>(b.data), static_cast<std::streamsize>(b.size));
+  }
+
+  // 5. Emit any remaining config OBUs.
+  for (size_t c = 0; c < cfg_spans.size(); ++c) {
+    emit_cfg(c);
+  }
+}
+
 // Find the first track whose sample entry type is 'av02'.
 uint32_t find_av02_track(MP4Movie movie, uint32_t* out_track_count) {
   uint32_t count = 0;
@@ -251,21 +361,22 @@ bool Av2Demuxer::demux(const std::string& input_mp4, const std::string& output_o
       out.write(reinterpret_cast<const char*>(sample_data),
                 static_cast<std::streamsize>(td_prefix));
       if (is_sync) {
-        out.write(reinterpret_cast<const char*>(config_obus),
-                  static_cast<std::streamsize>(config_obus_size));
+        write_sync_sample_with_config_obus(out, config_obus, config_obus_size,
+                                           sample_data + td_prefix, size - td_prefix);
+      } else {
+        out.write(reinterpret_cast<const char*>(sample_data + td_prefix),
+                  static_cast<std::streamsize>(size - td_prefix));
       }
-      out.write(reinterpret_cast<const char*>(sample_data + td_prefix),
-                static_cast<std::streamsize>(size - td_prefix));
       ++samples_with_td;
     } else {
       // Sample has no TD (the default --drop-td muxing). Synthesize one.
       out.write(reinterpret_cast<const char*>(kTdBytes), sizeof(kTdBytes));
       if (is_sync) {
-        out.write(reinterpret_cast<const char*>(config_obus),
-                  static_cast<std::streamsize>(config_obus_size));
+        write_sync_sample_with_config_obus(out, config_obus, config_obus_size, sample_data, size);
+      } else {
+        out.write(reinterpret_cast<const char*>(sample_data),
+                  static_cast<std::streamsize>(size));
       }
-      out.write(reinterpret_cast<const char*>(sample_data),
-                static_cast<std::streamsize>(size));
     }
     total_sample_bytes += size;
     total_config_bytes += config_obus_size;
