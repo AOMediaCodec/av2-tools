@@ -77,6 +77,36 @@ TEST_F(AV2OBUParserTest, ParseStableOBUHeaders) {
   std::remove(fname);
 }
 
+// Test default layer ids of OBUs without the extension byte
+TEST_F(AV2OBUParserTest, DefaultLayerIdsWithoutExtension) {
+  const std::vector<uint8_t> data = {
+    0x01, 0x08,        // TEMPORAL_DELIMITER, no extension
+    0x02, 0x64, 0x80,  // PADDING, no extension, 1 byte payload
+  };
+  const char* fname = "test_default_layers.obu";
+  createTestFile(fname, data);
+  ASSERT_TRUE(parser->parse_file(fname));
+  const auto& obus = parser->obus();
+  ASSERT_EQ(obus.size(), 2u);
+  EXPECT_EQ(obus[0]->header().get_xlayer_id(), GLOBAL_XLAYER_ID) << "TD without extension is global";
+  EXPECT_EQ(obus[0]->header().get_mlayer_id(), 0u);
+  EXPECT_EQ(obus[1]->header().get_xlayer_id(), 0u) << "other OBUs default to xlayer 0";
+  EXPECT_EQ(obus[1]->header().get_mlayer_id(), 0u);
+  std::remove(fname);
+}
+
+TEST_F(AV2OBUParserTest, ToJsonHasSchemaVersion) {
+  const std::vector<uint8_t> data = {0x01, 0x08};
+  const char* fname = "test_schema_version.obu";
+  createTestFile(fname, data);
+  ASSERT_TRUE(parser->parse_file(fname));
+  const auto j = parser->to_json();
+  ASSERT_TRUE(j.contains("schema_version"));
+  EXPECT_EQ(j["schema_version"].get<int>(), 1);
+  EXPECT_EQ(j["obus"][0]["header"]["xlayer_id"].get<int>(), static_cast<int>(GLOBAL_XLAYER_ID));
+  std::remove(fname);
+}
+
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

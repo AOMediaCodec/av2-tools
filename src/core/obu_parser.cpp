@@ -23,6 +23,9 @@
 
 namespace av2_obu {
 
+// Version of the JSON layout of OBUParser::to_json(); increment on renamed, removed or changed fields
+constexpr int kJsonSchemaVersion = 1;
+
 bool OBUParser::parse_file(const std::string& filename) {
   std::ifstream ifs(filename, std::ios::binary);
   if (!ifs) {
@@ -143,7 +146,8 @@ bool OBUParser::scan_file(std::ifstream& ifs) {
 }
 
 json OBUParser::to_json() const {
-  json j = {{"tool_version", av2_obu::build_version()},
+  json j = {{"schema_version", kJsonSchemaVersion},
+            {"tool_version", av2_obu::build_version()},
             {"file", current_file_},
             {"obu_count", obus_.size()},
             {"obus", json::array()}};
@@ -193,7 +197,10 @@ OBUParser::Statistics OBUParser::get_statistics() const {
 
     // Layer analysis
     stats.layers.mlayer_ids.insert(obu->header().get_mlayer_id());
-    stats.layers.xlayer_ids.insert(obu->header().get_xlayer_id());
+    // global OBUs do not belong to a layer
+    if (obu->header().get_xlayer_id() != GLOBAL_XLAYER_ID) {
+      stats.layers.xlayer_ids.insert(static_cast<uint8_t>(obu->header().get_xlayer_id()));
+    }
     stats.layers.tlayer_ids.insert(obu->header().get_tlayer_id());
 
     // Type-specific analysis
