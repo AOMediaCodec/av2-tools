@@ -160,4 +160,15 @@ bool is_valid_metadata_type(uint32_t value) {
   return VALUE_TO_METADATA_TYPE.find(value) != VALUE_TO_METADATA_TYPE.end();
 }
 
+bool color_description_preset(uint32_t idc, uint32_t& primaries, uint32_t& transfer, uint32_t& matrix) {
+  switch (idc) {
+    case 1: primaries = 1; transfer = 1; matrix = 1; return true;    // BT.709 SDR
+    case 2: primaries = 9; transfer = 16; matrix = 9; return true;   // BT.2100 PQ
+    case 3: primaries = 9; transfer = 18; matrix = 9; return true;   // BT.2100 HLG
+    case 4: primaries = 1; transfer = 13; matrix = 0; return true;   // sRGB
+    case 5: primaries = 1; transfer = 13; matrix = 5; return true;   // sYCC
+    default: return false;
+  }
+}
+
 }  // namespace av2_obu

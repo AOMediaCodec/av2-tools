@@ -107,6 +107,41 @@ TEST_F(AV2OBUParserTest, ToJsonHasSchemaVersion) {
   std::remove(fname);
 }
 
+// color_description_idc presets are expanded to primaries, transfer and matrix
+TEST_F(AV2OBUParserTest, ColorDescriptionPresetsAreExpanded) {
+  uint32_t cp = 0, tc = 0, mc = 0;
+  EXPECT_FALSE(color_description_preset(0, cp, tc, mc)) << "0 means explicit";
+  EXPECT_FALSE(color_description_preset(6, cp, tc, mc)) << "reserved";
+  ASSERT_TRUE(color_description_preset(1, cp, tc, mc));
+  EXPECT_EQ(std::vector<uint32_t>({cp, tc, mc}), std::vector<uint32_t>({1, 1, 1}));
+  ASSERT_TRUE(color_description_preset(2, cp, tc, mc));
+  EXPECT_EQ(std::vector<uint32_t>({cp, tc, mc}), std::vector<uint32_t>({9, 16, 9}));
+  ASSERT_TRUE(color_description_preset(3, cp, tc, mc));
+  EXPECT_EQ(std::vector<uint32_t>({cp, tc, mc}), std::vector<uint32_t>({9, 18, 9}));
+  ASSERT_TRUE(color_description_preset(4, cp, tc, mc));
+  EXPECT_EQ(std::vector<uint32_t>({cp, tc, mc}), std::vector<uint32_t>({1, 13, 0}));
+  ASSERT_TRUE(color_description_preset(5, cp, tc, mc));
+  EXPECT_EQ(std::vector<uint32_t>({cp, tc, mc}), std::vector<uint32_t>({1, 13, 5}));
+}
+
+TEST_F(AV2OBUParserTest, ContentInterpretationPresetInJson) {
+  const std::vector<uint8_t> data = {
+    0x01, 0x08,                    // TEMPORAL_DELIMITER
+    0x03, 0x60, 0x20, 0x28,        // CONTENT_INTERPRETATION: color description present, idc 1, full_range 0
+  };
+  const char* fname = "test_ci_preset.obu";
+  createTestFile(fname, data);
+  ASSERT_TRUE(parser->parse_file(fname));
+  const auto j = parser->to_json();
+  const auto& cd = j["obus"][1]["color_description"];
+  EXPECT_EQ(cd["color_description_idc"].get<int>(), 1);
+  EXPECT_EQ(cd["color_primaries"].get<int>(), 1);
+  EXPECT_EQ(cd["transfer_characteristics"].get<int>(), 1);
+  EXPECT_EQ(cd["matrix_coefficients"].get<int>(), 1);
+  EXPECT_EQ(cd["full_range_flag"].get<int>(), 0);
+  std::remove(fname);
+}
+
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
