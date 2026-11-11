@@ -391,6 +391,10 @@ constexpr uint32_t CHROMA_FORMAT_400 = 1;  // Monochrome
 constexpr uint32_t CHROMA_FORMAT_444 = 2;
 constexpr uint32_t CHROMA_FORMAT_422 = 3;
 
+// Presets of color_description_idc (ci_/lcr_/ops_color_description_idc, values 1-5). Returns false for idc 0
+// (explicitly signaled) and for reserved values; the outputs are then left unchanged.
+bool color_description_preset(uint32_t idc, uint32_t& primaries, uint32_t& transfer, uint32_t& matrix);
+
 // Quantizer limits (per AV2 spec)
 constexpr uint32_t MAXQ_8_BITS = 255;  // Maximum quantizer when bit depth is 8
 constexpr uint32_t MAXQ_OFFSET = 24;   // Increase in allowed quantizer

@@ -86,6 +86,11 @@ bool OBUHeader::parse(std::ifstream& ifs) {
     obu_mlayer_id_ = (byte2 >> 5) & 0x07;
     obu_xlayer_id_ = byte2 & 0x1F;
     LIB_DEBUG("  Extension: mlayer={}, xlayer={}", obu_mlayer_id_, obu_xlayer_id_);
+  } else {
+    // No extension byte: mlayer is 0, xlayer is global for TD and MSDO, 0 otherwise (AV2 spec 5.2.2)
+    obu_mlayer_id_ = 0;
+    const OBUType type = to_obu_type(obu_type_);
+    obu_xlayer_id_ = (type == OBUType::TEMPORAL_DELIMITER || type == OBUType::MSDO) ? GLOBAL_XLAYER_ID : 0;
   }
 
   if (!is_valid_obu_type(obu_type_)) {

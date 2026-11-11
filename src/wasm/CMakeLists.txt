@@ -27,9 +27,9 @@ target_link_options(av2_wasm PRIVATE
   "SHELL:-s EXPORT_NAME='createAV2Module'"
   "SHELL:-s ALLOW_MEMORY_GROWTH=1"
   "SHELL:-s INITIAL_MEMORY=32MB"
-  "SHELL:-s ENVIRONMENT=web"
+  "SHELL:-s ENVIRONMENT=web,worker,node"
   "SHELL:-s FILESYSTEM=1"
-  "SHELL:-s ASSERTIONS=1"
+  "SHELL:-s ASSERTIONS=0"
   -O3
 )
 
