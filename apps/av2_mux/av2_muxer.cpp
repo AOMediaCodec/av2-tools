@@ -284,11 +284,12 @@ std::vector<int32_t> Av2Muxer::compute_composition_offsets(
     int32_t off = 0;
     int64_t output_doh = -1;
 
+    // A new CVS restarts OrderHintLsbs at 0. The lifter carries the running offset itself
+    // (see DisplayOrderLifter::process()), so do not recreate it at a CVS boundary: that would
+    // discard the accumulated base and restart the composition timeline at 0, making the PTS of
+    // every CVS collide.
     if (tus[i].is_sync_sample() && i > start) {
       if (const SequenceHeaderOBU* cvs_sh = find_sh_in_tu(tus[i], base_xlayer_id_)) {
-        doh_lifter_ =
-          std::make_unique<DisplayOrderLifter>(cvs_sh->sequence_header().inter_config.OrderHintBits);
-        ref_buffer_ = RefFrameBuffer{};
         sh = &cvs_sh->sequence_header();
       }
     }

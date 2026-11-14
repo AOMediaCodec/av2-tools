@@ -84,6 +84,19 @@ int64_t DisplayOrderLifter::process(const BaseOBU& obu, const FrameHeaderInfo& f
     anchored_ = true;
   }
 
+  // A CLK starts a new CVS: it restarts OrderHintLsbs at 0, so continue the DOH where the
+  // previous CVS left off instead of returning to 0. The lift above works on CVS-relative
+  // values (refs hold those), so the base is only added on the way out.
+  if (is_clk) {
+    if (cvs_started_) {
+      cvs_base_ += static_cast<int64_t>(max_lifted_in_cvs_) + 1;
+      max_lifted_in_cvs_ = 0;
+    }
+    cvs_started_ = true;
+  }
+
+  if (lifted > max_lifted_in_cvs_) max_lifted_in_cvs_ = lifted;
+
   // CLK at start of CVS clears the ref buffer.
   if (type == OBUType::CLK) {
     refs.invalidate_all();
@@ -111,7 +124,7 @@ int64_t DisplayOrderLifter::process(const BaseOBU& obu, const FrameHeaderInfo& f
     }
   }
 
-  return static_cast<int64_t>(lifted) - static_cast<int64_t>(anchor_);
+  return static_cast<int64_t>(lifted) + cvs_base_ - static_cast<int64_t>(anchor_);
 }
 
 }  // namespace av2_obu
