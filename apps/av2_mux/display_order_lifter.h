@@ -38,6 +38,12 @@ class DisplayOrderLifter {
   uint64_t mod_;
   bool anchored_ = false;
   uint64_t anchor_ = 0;
+  // Each CVS restarts OrderHintLsbs at 0, so lifted values are only meaningful within a CVS.
+  // cvs_base_ carries the running offset from previous CVSs so that the returned DOH stays
+  // monotonic across the whole stream (0..N-1, N..2N-1, ...).
+  int64_t cvs_base_ = 0;
+  bool cvs_started_ = false;
+  uint64_t max_lifted_in_cvs_ = 0;
 };
 
 }  // namespace av2_obu

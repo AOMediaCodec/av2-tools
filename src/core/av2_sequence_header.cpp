@@ -584,7 +584,10 @@ bool SequenceFilterConfig::parse(BitstreamReader& br, bool single_picture_header
   enable_restoration = br.read_bit();
 
   if (enable_restoration) {
-    lr_tools_disable.resize(2, std::vector<uint32_t>(2, 0));
+    // The per-plane array is indexed by FrameRestorationType: RESTORE_PC_WIENER (1) and
+    // RESTORE_WIENER_NONSEP (2). It therefore needs three entries, not two: sizing it to two
+    // wrote one element past the end of the inner vector and corrupted the heap.
+    lr_tools_disable.resize(2, std::vector<uint32_t>(RESTORE_WIENER_NONSEP + 1, 0));
     lr_tools_disable[0][RESTORE_PC_WIENER] = br.read_bit();
     lr_tools_disable[0][RESTORE_WIENER_NONSEP] = br.read_bit();
     lr_tools_disable[1][RESTORE_PC_WIENER] = 1;
