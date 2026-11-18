@@ -20,6 +20,7 @@
 #include <av2_obu/core/bitstream_reader.h>
 #include <av2_obu/core/frame_header_info.h>
 #include <av2_obu/core/obu_parser.h>
+#include <av2_obu/obus/sequence_header_obu.h>
 
 using namespace av2_obu;
 
@@ -245,6 +246,33 @@ TEST(FrameHeaderInfoTest, TipWithImplicitRefMapAndSizeOverrideDoesNotOverread) {
   EXPECT_EQ(fh.refresh_frame_flags, 4u);
   EXPECT_TRUE(fh.is_output_frame);
   EXPECT_EQ(fh.FrameWidth, 640u);
+}
+
+// Each plane is indexed by restoration type up to RESTORE_WIENER_NONSEP
+TEST_F(AV2OBUParserTest, SequenceHeaderLoopRestorationToolsAreInBounds) {
+  const std::vector<uint8_t> data = {
+    0x01, 0x08,  // TEMPORAL_DELIMITER
+    0x19, 0x84, 0x00, 0x88, 0x0C, 0x80, 0x87, 0xBF, 0xE4, 0x86, 0x18, 0x00, 0x00, 0x07,
+    0x9B, 0xB9, 0xA0, 0x2E, 0x6F, 0xCC, 0xEF, 0x96, 0x9B, 0x9C, 0x56, 0x84,  // SEQUENCE_HEADER
+  };
+  const char* fname = "test_sh_lr_tools.obu";
+  createTestFile(fname, data);
+  ASSERT_TRUE(parser->parse_file(fname));
+  ASSERT_EQ(parser->obus().size(), 2u);
+  const auto* sh_obu = dynamic_cast<const SequenceHeaderOBU*>(parser->obus()[1].get());
+  ASSERT_NE(sh_obu, nullptr);
+  const auto& fc = sh_obu->sequence_header().filter_config;
+  ASSERT_EQ(fc.enable_restoration, 1u);
+  ASSERT_EQ(fc.lr_tools_disable.size(), 2u);
+  for (const auto& plane : fc.lr_tools_disable) {
+    EXPECT_GE(plane.size(), static_cast<size_t>(RESTORE_WIENER_NONSEP) + 1);
+  }
+  EXPECT_EQ(fc.lr_tools_disable[1][RESTORE_PC_WIENER], 1u);
+  if (!fc.lr_tools_uv_present) {
+    EXPECT_EQ(fc.lr_tools_disable[1][RESTORE_WIENER_NONSEP],
+              fc.lr_tools_disable[0][RESTORE_WIENER_NONSEP]);
+  }
+  std::remove(fname);
 }
 
 int main(int argc, char** argv) {

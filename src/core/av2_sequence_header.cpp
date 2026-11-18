@@ -584,7 +584,8 @@ bool SequenceFilterConfig::parse(BitstreamReader& br, bool single_picture_header
   enable_restoration = br.read_bit();
 
   if (enable_restoration) {
-    lr_tools_disable.resize(2, std::vector<uint32_t>(2, 0));
+    // Indexed by restoration type, so each plane needs RESTORE_WIENER_NONSEP + 1 entries
+    lr_tools_disable.assign(2, std::vector<uint32_t>(RESTORE_WIENER_NONSEP + 1, 0));
     lr_tools_disable[0][RESTORE_PC_WIENER] = br.read_bit();
     lr_tools_disable[0][RESTORE_WIENER_NONSEP] = br.read_bit();
     lr_tools_disable[1][RESTORE_PC_WIENER] = 1;
