@@ -11,6 +11,11 @@ add_executable(av2_mux
   ref_frame_buffer.cpp
 )
 
+target_include_directories(av2_mux
+  PRIVATE
+    ${libisomedia_SOURCE_DIR}/IsoLib/libisomediafile/src
+)
+
 target_link_libraries(av2_mux
   PRIVATE
     av2_obu       # Brings spdlog and nlohmann_json transitively

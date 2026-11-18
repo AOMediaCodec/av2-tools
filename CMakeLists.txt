@@ -180,13 +180,37 @@ if(BUILD_CONTAINER_TOOLS)
     GIT_SHALLOW    FALSE  # Disable shallow clone for branch
     GIT_SUBMODULES ""     # Don't initialize any submodules during fetch
     UPDATE_DISCONNECTED TRUE  # Don't update on every build
-    # Fix off-by-one in SampleToChunkAtom::lookupSample(): the boundary sample of a
-    # stsc run (e.g. the first sync sample of a new CVS) is misattributed to the
-    # previous run's sample description index, corrupting av2C config-OBU reinjection
-    # on demux for multi-CVS streams.
+    # 1. Fix off-by-one in SampleToChunkAtom::lookupSample() for multi-CVS stsc runs.
+    # 2. Honor currentSampleEntryIndex in SampleTableAtom::addSamples() when merging
+    #    fragments (where setDefaultSampleEntry() selects tfhd->sample_description_index).
+    # 3. Preserve signed ctts/stss state across fragments in TrackFragmentAtom::mergeRuns().
+    # 4. Use default-base-is-moof in tfhd and moof-relative data_offset in trun for fMP4.
     PATCH_COMMAND sed -i.bak
       "s/if(sampleNumber <= (firstSampleThisChunkRun + samplesThisChunkRun))/if(sampleNumber < (firstSampleThisChunkRun + samplesThisChunkRun))/"
       IsoLib/libisomediafile/src/SampleToChunkAtom.c
+      COMMAND sed -i.bak
+      "365s/= stsd->getEntryCount(stsd)/= (self->currentSampleEntryIndex ? self->currentSampleEntryIndex : stsd->getEntryCount(stsd))/"
+      IsoLib/libisomediafile/src/SampleTableAtom.c
+      COMMAND sed -i.bak
+      "s/^        stbl->setDefaultSampleEntry(stbl, tfhd->sample_description_index)/        (trun->version == 1 ? (stbl->useSignedCompositionTimeOffsets = 1) : 0), stbl->setDefaultSampleEntry(stbl, tfhd->sample_description_index)/"
+      IsoLib/libisomediafile/src/TrackFragmentAtom.c
+      COMMAND sed -i.bak
+      "s/(all_sync == 0 ? syncSamplesH : NULL)/((all_sync == 0 || stbl->SyncSample != NULL) ? syncSamplesH : NULL)/"
+      IsoLib/libisomediafile/src/TrackFragmentAtom.c
+      COMMAND sed -i.bak
+      "s/tfhd_flags                    = tfhd_base_data_offset_present/tfhd_flags                    = tfhd_default_base_is_moof/"
+      IsoLib/libisomediafile/src/TrackFragmentAtom.c
+      COMMAND sed -i.bak
+      -e "97s/err = MP4NoErr/err = ((void)mdatBase, (void)mdatEnd, MP4NoErr)/"
+      -e "98s/(void)mdatBase/MP4ListItemPtr it = self->atomList ? self->atomList->head : NULL/"
+      -e "s/if(self->samples_use_mdat == 1) tfhd->base_data_offset = mdatOffset/if(self->samples_use_mdat == 1) while(it) (((MP4TrackRunAtomPtr)it->data)->data_offset += mdatOffset, it = it->link)/"
+      IsoLib/libisomediafile/src/TrackFragmentAtom.c
+      COMMAND sed -i.bak
+      "66s/, mdatOffset)/, (mdatOffset >= 0 ? (s32)(self->size + 8) : -(s32)(self->size + 8)))/"
+      IsoLib/libisomediafile/src/MovieFragmentAtom.c
+      COMMAND sed -i.bak
+      "s/if(self->data_offset != 0) flags |= trun_data_offset_present/flags |= trun_data_offset_present/"
+      IsoLib/libisomediafile/src/TrackFragmentRunAtom.c
   )
 
   # Configure isobmff to build library only (no submodules, no examples)
