@@ -33,11 +33,16 @@ class DisplayOrderLifter {
   int64_t process(const BaseOBU& obu, const FrameHeaderInfo& fh,
                   const AV2SequenceHeader& sh, RefFrameBuffer& refs);
 
+  // A later CVS may use a different OrderHintBits; the accumulated CVS base is kept.
+  void set_order_hint_bits(uint32_t order_hint_bits);
+
  private:
   uint32_t order_hint_bits_;
   uint64_t mod_;
   bool anchored_ = false;
   uint64_t anchor_ = 0;
+  int64_t cvs_base_ = 0;
+  int64_t max_output_in_cvs_ = -1;
 };
 
 }  // namespace av2_obu

@@ -79,9 +79,12 @@ int64_t DisplayOrderLifter::process(const BaseOBU& obu, const FrameHeaderInfo& f
     }
   }
 
-  if (!anchored_) {
+  // Each CVS restarts OrderHintLsbs, so anchor at its key frame and offset by the previous CVS's end
+  if ((is_clk && mlayer_id == 0) || !anchored_) {
+    if (anchored_) cvs_base_ += max_output_in_cvs_ + 1;
     anchor_ = lifted;
     anchored_ = true;
+    max_output_in_cvs_ = -1;
   }
 
   // CLK at start of CVS clears the ref buffer.
@@ -111,7 +114,14 @@ int64_t DisplayOrderLifter::process(const BaseOBU& obu, const FrameHeaderInfo& f
     }
   }
 
-  return static_cast<int64_t>(lifted) - static_cast<int64_t>(anchor_);
+  const int64_t relative = static_cast<int64_t>(lifted) - static_cast<int64_t>(anchor_);
+  if (fh.is_output_frame && relative > max_output_in_cvs_) max_output_in_cvs_ = relative;
+  return cvs_base_ + relative;
+}
+
+void DisplayOrderLifter::set_order_hint_bits(uint32_t order_hint_bits) {
+  order_hint_bits_ = order_hint_bits;
+  mod_ = order_hint_bits == 0 ? 1ull : (1ull << order_hint_bits);
 }
 
 }  // namespace av2_obu

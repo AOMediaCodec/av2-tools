@@ -493,9 +493,7 @@ std::vector<int32_t> Av2Muxer::compute_composition_offsets(
 
     if (tus[i].is_sync_sample() && i > start) {
       if (const SequenceHeaderOBU* cvs_sh = find_sh_in_tu(tus[i], base_xlayer_id_)) {
-        doh_lifter_ =
-          std::make_unique<DisplayOrderLifter>(cvs_sh->sequence_header().inter_config.OrderHintBits);
-        ref_buffer_ = RefFrameBuffer{};
+        doh_lifter_->set_order_hint_bits(cvs_sh->sequence_header().inter_config.OrderHintBits);
         sh = &cvs_sh->sequence_header();
       }
     }

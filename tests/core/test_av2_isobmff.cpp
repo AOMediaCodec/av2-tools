@@ -15,11 +15,14 @@
 #include <cstdint>
 #include <cstdio>
 #include <fstream>
+#include <map>
+#include <set>
 #include <string>
 #include <vector>
 
 #include <av2_obu/core/av2_types.h>
 #include <av2_obu/core/bitstream_writer.h>
+#include <av2_obu/core/frame_header_info.h>
 #include <av2_obu/core/obu_parser.h>
 #include <av2_obu/core/temporal_unit.h>
 #include <av2_obu/obus/sequence_header_obu.h>
@@ -28,6 +31,7 @@
 #include "av2_demuxer.h"
 #include "av2_muxer.h"
 #include "colr_info.h"
+#include "frame_header_helpers.h"
 #include "mux_strategy.h"
 
 namespace av2_obu {
@@ -115,7 +119,8 @@ std::vector<uint8_t> make_seq_header_obu(uint8_t xlayer_id = 0, uint32_t profile
                                          uint32_t level_idx = 1, uint32_t tier = 0,
                                          uint32_t chroma_format_idc = CHROMA_FORMAT_420,
                                          uint32_t bit_depth_idc = 1,  // 1 = 8-bit, 0 = 10-bit
-                                         uint32_t width = 176, uint32_t height = 144) {
+                                         uint32_t width = 176, uint32_t height = 144,
+                                         bool monotonic_output_order = true) {
   BitstreamWriter bw;
   write_uvlc(bw, 0);  // seq_header_id = 0
   bw.write_bits(profile_idc, 5);
@@ -133,7 +138,7 @@ std::vector<uint8_t> make_seq_header_obu(uint8_t xlayer_id = 0, uint32_t profile
   bw.write_bit(0);      // still_picture
   bw.write_bits(0, 2);  // max_tlayer_id
   bw.write_bits(0, 3);  // max_mlayer_id
-  bw.write_bit(1);      // monotonic_output_order_flag
+  bw.write_bit(monotonic_output_order ? 1 : 0);  // monotonic_output_order_flag
 
   bw.write_bits(7, 4);  // frame_width_bits_minus_1 = 7 (8 bits)
   bw.write_bits(7, 4);  // frame_height_bits_minus_1 = 7 (8 bits)
@@ -980,6 +985,275 @@ TEST(AV2ISOBMFFTest, MultiCVSOutOfBandRoundTrip) {
   std::remove(in_obu.c_str());
   std::remove(out_mp4.c_str());
   std::remove(out_obu.c_str());
+}
+
+// ============================================================================
+// Non-monotonic output order: one composition time per sample
+// ============================================================================
+
+// Inter frame for a sequence header with monotonic_output_order_flag = 0
+std::vector<uint8_t> make_inter_frame_obu(uint8_t xlayer_id, uint32_t order_hint,
+                                          bool immediate_output, bool implicit_output,
+                                          uint8_t refresh_frame_flags) {
+  BitstreamWriter bw;
+  bw.write_bit(1);      // is_first_tile_group = 1
+  write_uvlc(bw, 0);    // cur_mfh_id = 0
+  write_uvlc(bw, 0);    // seq_header_id_in_frame_header = 0
+  bw.write_bit(1);      // frame_is_inter = 1
+  bw.write_bit(immediate_output ? 1 : 0);
+  if (!immediate_output) bw.write_bit(implicit_output ? 1 : 0);
+  bw.write_bit(0);      // frame_size_override_flag = 0
+  bw.write_bits(order_hint, 8);
+  bw.write_bit(0);      // signal_primary_ref_frame = 0
+  bw.write_bit(0);      // disable_cross_frame_cdf_init = 0
+  bw.write_bits(refresh_frame_flags, 8);
+  bw.write_bit(1);      // explicitRefFrameMap = 1
+  bw.write_bits(1, 3);  // num_total_refs = 1
+  bw.write_bits(0, 3);  // ref_frame_idx[0] = 0
+  bw.byte_align();
+  bw.write_bits(0x55, 8);
+  bw.write_bits(0x80, 8);
+  return wrap_annexb_obu(OBUType::REGULAR_TILE_GROUP, bw.bytes(), 0, 0, xlayer_id, xlayer_id != 0);
+}
+
+struct TestStream {
+  std::vector<uint8_t> bytes;
+  std::vector<int64_t> expected_cts;  // presentation position of each sample, in sample durations
+  size_t tu_count = 0;
+  size_t cvs_count = 0;
+  size_t frames_per_cvs = 0;
+};
+
+// Every CVS restarts at order hint 0 and presents after the previous one. Each temporal unit has
+// one output frame per extended layer; reordered frames are implicit output frames.
+TestStream make_non_monotonic_stream(const std::vector<uint32_t>& decode_order_hints,
+                                     uint32_t cvs_count, uint32_t xlayer_count,
+                                     bool extra_non_output_frames) {
+  TestStream ts;
+  ts.cvs_count = cvs_count;
+  ts.frames_per_cvs = decode_order_hints.size();
+  const uint32_t span = *std::max_element(decode_order_hints.begin(), decode_order_hints.end()) + 1;
+  auto append = [&](const std::vector<uint8_t>& b) {
+    ts.bytes.insert(ts.bytes.end(), b.begin(), b.end());
+  };
+  for (uint32_t cvs = 0; cvs < cvs_count; ++cvs) {
+    for (size_t k = 0; k < decode_order_hints.size(); ++k) {
+      append(make_td_obu());
+      for (uint32_t x = 0; x < xlayer_count; ++x) {
+        const uint8_t xl = static_cast<uint8_t>(x);
+        if (k == 0) {
+          append(make_seq_header_obu(xl, 0, 1, 0, CHROMA_FORMAT_420, 1, 176, 144, false));
+          append(make_clk_obu(xl, 0));
+          continue;
+        }
+        if (extra_non_output_frames && k % 3 == 0) {
+          append(make_inter_frame_obu(xl, span + 1, false, false, 0x04));
+        }
+        append(make_inter_frame_obu(xl, decode_order_hints[k], false, true, 0x02));
+      }
+      ts.expected_cts.push_back(static_cast<int64_t>(cvs) * span + decode_order_hints[k]);
+      ++ts.tu_count;
+    }
+  }
+  return ts;
+}
+
+struct MuxVariant {
+  const char* name;
+  bool inband;
+  bool fragmented;
+  uint32_t fragment_duration_ms;
+};
+
+const MuxVariant kMuxVariants[] = {
+    {"out-of-band", false, false, 0},
+    {"in-band", true, false, 0},
+    {"fragmented", false, true, 0},
+    {"fragmented-100ms", false, true, 100},
+};
+
+struct Timeline {
+  uint32_t sample_count = 0;
+  std::vector<int64_t> cts_frames;
+  bool has_composition_offsets = false;
+};
+
+uint32_t be32(const std::vector<uint8_t>& b, size_t o) {
+  return (static_cast<uint32_t>(b[o]) << 24) | (static_cast<uint32_t>(b[o + 1]) << 16) |
+         (static_cast<uint32_t>(b[o + 2]) << 8) | static_cast<uint32_t>(b[o + 3]);
+}
+
+std::vector<size_t> find_all_fourcc(const std::vector<uint8_t>& b, const char* fourcc) {
+  std::vector<size_t> found;
+  const uint8_t needle[4] = {static_cast<uint8_t>(fourcc[0]), static_cast<uint8_t>(fourcc[1]),
+                             static_cast<uint8_t>(fourcc[2]), static_cast<uint8_t>(fourcc[3])};
+  auto it = b.begin();
+  while ((it = std::search(it, b.end(), std::begin(needle), std::end(needle))) != b.end()) {
+    found.push_back(static_cast<size_t>(it - b.begin()));
+    ++it;
+  }
+  return found;
+}
+
+// CTS of every sample in units of the constant sample duration, from 'ctts' or the 'trun' boxes
+bool read_timeline(const std::vector<uint8_t>& mp4, int64_t dur, Timeline& tl) {
+  auto push = [&](int64_t offset) {
+    const int64_t cts = static_cast<int64_t>(tl.cts_frames.size()) * dur + offset;
+    if (cts % dur != 0) return false;
+    tl.cts_frames.push_back(cts / dur);
+    return true;
+  };
+  const auto truns = find_all_fourcc(mp4, "trun");
+  if (!truns.empty()) {
+    for (const size_t pos : truns) {
+      const size_t p = pos + 4;
+      const uint32_t flags = (static_cast<uint32_t>(mp4[p + 1]) << 16) |
+                             (static_cast<uint32_t>(mp4[p + 2]) << 8) | mp4[p + 3];
+      const uint32_t count = be32(mp4, p + 4);
+      size_t o = p + 8;
+      if (flags & 0x1) o += 4;
+      if (flags & 0x4) o += 4;
+      for (uint32_t s = 0; s < count; ++s) {
+        if (flags & 0x100) {
+          if (static_cast<int64_t>(be32(mp4, o)) != dur) return false;
+          o += 4;
+        }
+        if (flags & 0x200) o += 4;
+        if (flags & 0x400) o += 4;
+        int32_t offset = 0;
+        if (flags & 0x800) {
+          offset = static_cast<int32_t>(be32(mp4, o));
+          o += 4;
+          tl.has_composition_offsets = true;
+        }
+        if (!push(offset)) return false;
+      }
+    }
+    tl.sample_count = static_cast<uint32_t>(tl.cts_frames.size());
+    return true;
+  }
+  const auto stsz = find_all_fourcc(mp4, "stsz");
+  if (stsz.size() != 1) return false;
+  tl.sample_count = be32(mp4, stsz[0] + 4 + 8);
+  const auto ctts = find_all_fourcc(mp4, "ctts");
+  if (ctts.empty()) {
+    for (uint32_t i = 0; i < tl.sample_count; ++i) push(0);
+    return true;
+  }
+  tl.has_composition_offsets = true;
+  const size_t p = ctts[0] + 4;
+  const uint32_t entries = be32(mp4, p + 4);
+  for (uint32_t e = 0; e < entries; ++e) {
+    const uint32_t count = be32(mp4, p + 8 + e * 8);
+    const int32_t offset = static_cast<int32_t>(be32(mp4, p + 12 + e * 8));
+    for (uint32_t c = 0; c < count; ++c) {
+      if (!push(offset)) return false;
+    }
+  }
+  return true;
+}
+
+// Each temporal unit has one output time: one output frame per extended layer, same order hint
+void expect_one_output_time_per_tu(const OBUParser& parser) {
+  for (const auto& tu : parser.temporal_units()) {
+    std::map<uint32_t, int> outputs_per_xlayer;
+    std::set<uint32_t> order_hints;
+    for (const auto* obu : tu.obus()) {
+      const FrameHeaderInfo* fh = frame_header_of(obu);
+      if (!fh || !fh->is_output_frame) continue;
+      ++outputs_per_xlayer[obu->header().get_xlayer_id()];
+      order_hints.insert(fh->order_hint);
+    }
+    EXPECT_FALSE(outputs_per_xlayer.empty());
+    for (const auto& [xlayer, count] : outputs_per_xlayer) {
+      EXPECT_EQ(count, 1) << "xlayer " << xlayer;
+    }
+    EXPECT_EQ(order_hints.size(), 1u);
+  }
+}
+
+void check_non_monotonic_stream(const TestStream& ts, const std::string& stem) {
+  for (const auto& v : kMuxVariants) {
+    SCOPED_TRACE(std::string(stem) + " / " + v.name);
+    const std::string base = stem + "_" + std::string(v.name);
+    const std::string in_obu = base + ".obu";
+    const std::string out_mp4 = base + ".mp4";
+    const std::string out_obu = base + "_demux.obu";
+    write_bytes_to_file(in_obu, ts.bytes);
+
+    OBUParser in_parser;
+    ASSERT_TRUE(in_parser.parse_file(in_obu));
+    ASSERT_EQ(in_parser.temporal_units().size(), ts.tu_count);
+    expect_one_output_time_per_tu(in_parser);
+
+    UserOptions user_opts;
+    user_opts.frame_rate = 30.0;
+    user_opts.inband_config = v.inband;
+    user_opts.fragmented = v.fragmented;
+    user_opts.fragment_duration_ms = v.fragment_duration_ms;
+    MuxStrategy strategy = determine_strategy(in_parser.get_statistics(), user_opts);
+    Av2Muxer muxer(in_obu, strategy);
+    ASSERT_TRUE(muxer.package(in_parser, out_mp4));
+
+    const auto mp4 = read_bytes_from_file(out_mp4);
+    EXPECT_TRUE(contains_fourcc(mp4, v.inband ? "av2e" : "av2E"));
+    const size_t fragments = find_all_fourcc(mp4, "moof").size();
+    if (!v.fragmented) {
+      EXPECT_EQ(fragments, 0u);
+    } else if (v.fragment_duration_ms == 0) {
+      EXPECT_EQ(fragments, ts.cvs_count) << "split at every sync sample only";
+    } else if (ts.frames_per_cvs > 3) {
+      EXPECT_GT(fragments, ts.cvs_count) << "also split by duration";
+    }
+
+    Timeline tl;
+    ASSERT_TRUE(read_timeline(mp4, strategy.default_sample_duration, tl));
+    EXPECT_EQ(tl.sample_count, ts.tu_count);
+    EXPECT_EQ(tl.cts_frames.size(), tl.sample_count) << "one composition time per sample";
+    EXPECT_EQ(std::set<int64_t>(tl.cts_frames.begin(), tl.cts_frames.end()).size(),
+              tl.cts_frames.size())
+        << "composition times are unique";
+    EXPECT_EQ(tl.cts_frames, ts.expected_cts);
+    EXPECT_TRUE(tl.has_composition_offsets);
+
+    ASSERT_TRUE(Av2Demuxer().demux(out_mp4, out_obu));
+    OBUParser demux_parser;
+    ASSERT_TRUE(demux_parser.parse_file(out_obu));
+    EXPECT_EQ(demux_parser.temporal_units().size(), ts.tu_count);
+
+    std::remove(in_obu.c_str());
+    std::remove(out_mp4.c_str());
+    std::remove(out_obu.c_str());
+  }
+}
+
+// Each CVS restarts OrderHintLsbs at 0, so the composition timeline must continue across CVS
+TEST(AV2ISOBMFFTest, NonMonotonicMultiCVSCompositionTimeline) {
+  ASSERT_NO_FATAL_FAILURE(check_non_monotonic_stream(
+      make_non_monotonic_stream({0, 2, 1}, 3, 1, false), "nonmono_reorder_3cvs"));
+}
+
+// Three-level hierarchical structure: decode order 0 8 4 2 1 3 6 5 7
+const std::vector<uint32_t> kPyramidDecodeOrder = {0, 8, 4, 2, 1, 3, 6, 5, 7};
+
+TEST(AV2ISOBMFFTest, NonMonotonicHierarchicalStructure) {
+  ASSERT_NO_FATAL_FAILURE(check_non_monotonic_stream(
+      make_non_monotonic_stream(kPyramidDecodeOrder, 1, 1, false), "nonmono_pyramid"));
+}
+
+TEST(AV2ISOBMFFTest, NonMonotonicHierarchicalStructureMultiCVS) {
+  ASSERT_NO_FATAL_FAILURE(check_non_monotonic_stream(
+      make_non_monotonic_stream(kPyramidDecodeOrder, 3, 1, false), "nonmono_pyramid_3cvs"));
+}
+
+TEST(AV2ISOBMFFTest, NonMonotonicHierarchicalStructureWithNonOutputFrames) {
+  ASSERT_NO_FATAL_FAILURE(check_non_monotonic_stream(
+      make_non_monotonic_stream(kPyramidDecodeOrder, 2, 1, true), "nonmono_pyramid_nonoutput"));
+}
+
+TEST(AV2ISOBMFFTest, NonMonotonicHierarchicalStructureTwoExtendedLayers) {
+  ASSERT_NO_FATAL_FAILURE(check_non_monotonic_stream(
+      make_non_monotonic_stream(kPyramidDecodeOrder, 2, 2, false), "nonmono_pyramid_2xlayers"));
 }
 
 }  // namespace
