@@ -20,6 +20,13 @@ namespace av2_obu {
 
 class BaseOBU;
 
+// Returns true if `obu` is an OBU allowed in OutOfBandAV2CodecConfigurationBox ('av2C'):
+// OBU_MSDO, OBU_LAYER_CONFIGURATION_RECORD, OBU_OPERATING_POINT_SET, OBU_ATLAS_SEGMENT,
+// OBU_METADATA_SHORT (xlayer_id == GLOBAL_XLAYER_ID && metadata_is_suffix == 0),
+// OBU_METADATA_GROUP (xlayer_id == GLOBAL_XLAYER_ID && metadata_is_suffix == 0),
+// and OBU_SEQUENCE_HEADER.
+bool is_config_obu_instance(const BaseOBU& obu);
+
 class TemporalUnit {
 public:
   size_t index() const { return index_; }
@@ -35,10 +42,12 @@ public:
   const std::vector<const BaseOBU*>& obus() const { return obus_; }
   const BaseOBU* obu(size_t index) const { return obus_[index]; }
 
-  // OBUs that go into the ISOBMFF sample bytes: frame data only. Configuration
-  // OBUs (sequence headers, LCR, OPS, content interpretation) are excluded -
-  // they are carried in configOBUs of the sample entry.
-  std::vector<const BaseOBU*> sample_obus(bool keep_td = false) const;
+  // OBUs that go into the ISOBMFF sample bytes.
+  // Forbidden OBUs (OBU_CONTENT_INTERPRETATION, OBU_PADDING, and OBU_TEMPORAL_DELIMITER
+  // when !keep_td) are always excluded. When strip_config_obus is true (OutOfBandAV2SampleEntry
+  // 'av2E'), configuration OBUs carried in 'av2C' are also excluded.
+  std::vector<const BaseOBU*> sample_obus(bool keep_td = false,
+                                          bool strip_config_obus = true) const;
 
   auto begin() const { return obus_.begin(); }
   auto end() const { return obus_.end(); }

@@ -115,6 +115,8 @@ public:
   uint32_t lcr_xlayer_map() const { return lcr_xlayer_map_; }
   uint32_t lcr_global_purpose_id() const { return lcr_global_purpose_id_; }
   bool lcr_enforce_tile_alignment() const { return lcr_enforce_tile_alignment_flag_; }
+  bool has_global_atlas_id() const { return lcr_global_atlas_id_present_flag_ != 0; }
+  uint32_t global_atlas_id() const { return lcr_global_atlas_id_; }
   const std::vector<uint32_t>& xlayer_ids() const { return xlayer_ids_; }
   const std::vector<XLayerPTL>& xlayer_ptls() const { return xlayer_ptls_; }
   const AggregateInfo& aggregate_info() const { return aggregate_info_; }
@@ -123,6 +125,8 @@ public:
   // Local LCR fields
   uint32_t lcr_global_id() const { return lcr_global_id_; }
   uint32_t lcr_local_id() const { return lcr_local_id_; }
+  bool has_local_atlas_id() const { return lcr_local_atlas_id_present_flag_ != 0; }
+  uint32_t local_atlas_id() const { return lcr_local_atlas_id_; }
   const XLayerInfo& local_xlayer_info() const { return local_xlayer_info_; }
 
 protected:

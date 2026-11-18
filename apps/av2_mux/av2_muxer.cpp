@@ -10,22 +10,27 @@
  */
 
 #include "av2_muxer.h"
-#include "mux_log.h"
-
-#include <algorithm>
-#include <cstdint>
-#include <vector>
 
 #include <spdlog/fmt/fmt.h>
 #include <spdlog/spdlog.h>
 
+#include <algorithm>
+#include <cstdint>
+#include <set>
+#include <vector>
+
 #include "av2_codec_config.h"
 #include "colr_info.h"
 #include "frame_header_helpers.h"
+#include "mux_log.h"
 #include <av2_obu/core/base_obu.h>
 #include <av2_obu/core/frame_header_info.h>
 #include <av2_obu/core/obu_parser.h>
 #include <av2_obu/core/temporal_unit.h>
+#include <av2_obu/obus/atlas_segment_obu.h>
+#include <av2_obu/obus/content_interpretation_obu.h>
+#include <av2_obu/obus/layer_configuration_record_obu.h>
+#include <av2_obu/obus/msdo_obu.h>
 #include <av2_obu/obus/sequence_header_obu.h>
 
 namespace av2_obu {
@@ -117,21 +122,6 @@ bool Av2Muxer::package(const OBUParser& parser, const std::string& output_path) 
   return true;
 }
 
-namespace {
-
-std::vector<uint8_t> read_obu_bytes(std::ifstream& ifs, const BaseOBU& o) {
-  const auto& pos = o.position();
-  size_t total = pos.size_field_len + pos.header_len + pos.payload_size;
-  std::vector<uint8_t> b(total);
-  ifs.clear();
-  ifs.seekg(pos.start_pos);
-  ifs.read(reinterpret_cast<char*>(b.data()), static_cast<std::streamsize>(total));
-  ifs.clear();
-  return b;
-}
-
-}  // namespace
-
 bool Av2Muxer::setup_video_track(const OBUParser& parser) {
   if (parser.temporal_units().empty()) {
     MUX_ERROR("No temporal units found");
@@ -149,10 +139,202 @@ bool Av2Muxer::setup_video_track(const OBUParser& parser) {
   }
 
   const auto& tus = parser.temporal_units();
-  tu_desc_idx_.assign(tus.size(), 0);
+  tu_desc_idx_.assign(tus.size(), 1);
+
+  const SequenceHeaderOBU* first_sh = find_first_sequence_header(parser);
+  if (!first_sh) {
+    MUX_ERROR("No Sequence Header OBU found");
+    return false;
+  }
+
+  // Per av2-isobmff #av2-sample-entry: An AV2SampleEntry SHALL contain at least one 'pixi' box
+  // with the least significant bit of 'px_flags' enabled.
+  const PixiBox pixi = PixiBox::from_parser(parser);
+
+  // Extract optional aspect ratio ('pasp') from ContentInterpretationOBU (replacing forbidden CI OBU).
+  uint32_t pasp_h = 0;
+  uint32_t pasp_v = 0;
+  for (const auto& obu_ptr : parser.obus()) {
+    if (obu_ptr->type() != OBUType::CONTENT_INTERPRETATION) continue;
+    const auto* ci = dynamic_cast<const ContentInterpretationOBU*>(obu_ptr.get());
+    if (!ci || !ci->has_aspect_ratio_info()) continue;
+    if (ci->aspect_ratio_idc() == 255) {
+      pasp_h = static_cast<uint32_t>(ci->sar_width());
+      pasp_v = static_cast<uint32_t>(ci->sar_height());
+    } else if (ci->aspect_ratio_idc() <= 16) {
+      pasp_h = ASPECT_RATIO_WIDTH[ci->aspect_ratio_idc()];
+      pasp_v = ASPECT_RATIO_HEIGHT[ci->aspect_ratio_idc()];
+    }
+    break;
+  }
+  const bool has_pasp = (pasp_h > 0 && pasp_v > 0 && (pasp_h != 1 || pasp_v != 1));
+
+  // tkhd width is the presentation width, so apply the pixel aspect ratio to the coded width.
+  auto tkhd_width_for = [&](uint32_t w) -> uint32_t {
+    if (!has_pasp) return w;
+    const uint64_t scaled = (static_cast<uint64_t>(w) * pasp_h + pasp_v / 2) / pasp_v;
+    return static_cast<uint32_t>(std::min<uint64_t>(scaled, 0xFFFF));
+  };
+
+  use_inband_ = strategy_.inband_config;
+  if (use_inband_) {
+    const AV2SequenceHeader& sh = first_sh->sequence_header();
+    strategy_.any_non_monotonic = (sh.monotonic_output_order_flag == 0);
+    if (strategy_.any_non_monotonic) {
+      if (!check_doh_lifter_supported(parser)) return false;
+      doh_lifter_ = std::make_unique<DisplayOrderLifter>(sh.inter_config.OrderHintBits);
+    }
+
+    uint32_t w_full = static_cast<uint32_t>(sh.max_frame_width_minus_1) + 1;
+    uint32_t h_full = static_cast<uint32_t>(sh.max_frame_height_minus_1) + 1;
+    if (w_full > 0xFFFF || h_full > 0xFFFF) {
+      MUX_WARN("Frame dimensions {}x{} exceed 16-bit VisualSampleEntry field; truncating",
+               w_full, h_full);
+    }
+    uint16_t width = static_cast<uint16_t>(w_full & 0xFFFF);
+    uint16_t height = static_cast<uint16_t>(h_full & 0xFFFF);
+
+    InBandAV2CodecConfigurationBox av2c_inband =
+        InBandAV2CodecConfigurationBox::from_parser(parser);
+    if (!writer_.add_video_track_inband(strategy_.timescale, width, height, av2c_inband,
+                                        tkhd_width_for(width), height)) {
+      return false;
+    }
+    writer_.set_samples_per_chunk(strategy_.samples_per_chunk);
+
+    std::optional<ColrInfo> extracted_colr =
+        strategy_.colr_override ? strategy_.colr_override : extract_colr_info(parser);
+    ColrInfo colr = extracted_colr.value_or(ColrInfo{2, 2, 2, 0});
+    if (!writer_.add_colr_nclx(colr, 1)) return false;
+    if (!writer_.add_pixi(pixi, 1)) return false;
+    if (has_pasp && !writer_.add_pasp(pasp_h, pasp_v, 1)) return false;
+    last_colr_ = colr;
+    return true;
+  }
 
   std::vector<uint8_t> last_config_bytes;
   uint32_t active_desc_idx = 0;
+
+  bool has_atlas_dims = false;
+  bool atlas_dims_change_over_time = false;
+  uint32_t max_atlas_w = 0;
+  uint32_t max_atlas_h = 0;
+  std::pair<uint32_t, uint32_t> prev_atlas_dims{0, 0};
+
+  const MSDOOBU* active_msdo = nullptr;
+  std::vector<const LayerConfigurationRecordOBU*> active_lcrs;
+
+  auto matches_msdo = [](const AtlasSegmentOBU* atlas, const MSDOOBU* msdo) {
+    if (!atlas || !msdo || atlas->header().get_xlayer_id() != GLOBAL_XLAYER_ID)
+      return false;
+    const auto mode = atlas->mode_idc();
+    const bool has_stream_ids =
+      (mode == AtlasSegmentOBU::ModeIdc::MULTISTREAM_ATLAS ||
+       mode == AtlasSegmentOBU::ModeIdc::MULTISTREAM_ALPHA_ATLAS ||
+       (mode == AtlasSegmentOBU::ModeIdc::BASIC_ATLAS && atlas->basic_stream_id_present()));
+    if (!has_stream_ids || atlas->segments().empty())
+      return false;
+    std::set<uint32_t> msdo_xlayers;
+    for (const auto& s : msdo->streams()) {
+      msdo_xlayers.insert(s.sub_xlayer_id);
+    }
+    if (msdo_xlayers.empty())
+      return false;
+    for (const auto& seg : atlas->segments()) {
+      if (msdo_xlayers.find(seg.input_stream_id) == msdo_xlayers.end())
+        return false;
+    }
+    return true;
+  };
+
+  auto matches_lcr = [](const AtlasSegmentOBU* atlas,
+                        const std::vector<const LayerConfigurationRecordOBU*>& lcrs) {
+    if (!atlas)
+      return false;
+    for (const auto* lcr : lcrs) {
+      if (!lcr)
+        continue;
+      if (lcr->is_global() && lcr->has_global_atlas_id() &&
+          atlas->atlas_segment_id() == lcr->global_atlas_id()) {
+        return true;
+      }
+      if (!lcr->is_global() && lcr->has_local_atlas_id() &&
+          atlas->atlas_segment_id() == lcr->local_atlas_id()) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  for (const auto& tu : tus) {
+    const MSDOOBU* tu_msdo = nullptr;
+    std::vector<const LayerConfigurationRecordOBU*> tu_lcrs;
+    std::vector<const AtlasSegmentOBU*> tu_atlases;
+
+    for (const BaseOBU* p : tu) {
+      if (p->type() == OBUType::MSDO) {
+        if (const auto* msdo = dynamic_cast<const MSDOOBU*>(p))
+          tu_msdo = msdo;
+      } else if (p->type() == OBUType::LAYER_CONFIGURATION_RECORD) {
+        if (const auto* lcr = dynamic_cast<const LayerConfigurationRecordOBU*>(p)) {
+          tu_lcrs.push_back(lcr);
+        }
+      } else if (p->type() == OBUType::ATLAS_SEGMENT) {
+        if (const auto* atlas = dynamic_cast<const AtlasSegmentOBU*>(p)) {
+          tu_atlases.push_back(atlas);
+        }
+      }
+    }
+
+    if (tu_msdo)
+      active_msdo = tu_msdo;
+    if (!tu_lcrs.empty())
+      active_lcrs = tu_lcrs;
+
+    if (tu_atlases.empty())
+      continue;
+
+    const MSDOOBU* msdo = tu_msdo ? tu_msdo : active_msdo;
+    const auto& lcrs = !tu_lcrs.empty() ? tu_lcrs : active_lcrs;
+    if (!msdo && lcrs.empty())
+      continue;
+
+    const AtlasSegmentOBU* selected_atlas = nullptr;
+    for (const auto* atlas : tu_atlases) {
+      if ((msdo && matches_msdo(atlas, msdo)) || (!lcrs.empty() && matches_lcr(atlas, lcrs))) {
+        selected_atlas = atlas;
+        break;
+      }
+    }
+    // Fallback when MSDO or LCR is present and only one ATLAS_SEGMENT exists in the TU.
+    if (!selected_atlas && tu_atlases.size() == 1) {
+      selected_atlas = tu_atlases.front();
+    }
+
+    if (selected_atlas) {
+      if (auto dims = selected_atlas->canvas_dimensions()) {
+        if (!has_atlas_dims) {
+          has_atlas_dims = true;
+          prev_atlas_dims = *dims;
+          max_atlas_w = dims->first;
+          max_atlas_h = dims->second;
+        } else {
+          if (*dims != prev_atlas_dims) {
+            atlas_dims_change_over_time = true;
+            prev_atlas_dims = *dims;
+          }
+          max_atlas_w = std::max(max_atlas_w, dims->first);
+          max_atlas_h = std::max(max_atlas_h, dims->second);
+        }
+      }
+    }
+  }
+
+  if (atlas_dims_change_over_time) {
+    MUX_WARN("Atlas canvas dimensions change over the course of the track; using maximum canvas "
+             "dimensions {}x{} for track header and sample entry.",
+             max_atlas_w, max_atlas_h);
+  }
 
   for (uint32_t i = 0; i < tus.size(); ++i) {
     if (!tus[i].is_sync_sample()) {
@@ -160,18 +342,15 @@ bool Av2Muxer::setup_video_track(const OBUParser& parser) {
       continue;
     }
 
-    AV2CodecConfigurationBox av2c(input_ifs_);
-    std::vector<uint8_t> config_bytes;
+    OutOfBandAV2CodecConfigurationBox av2c(input_ifs_);
     const SequenceHeaderOBU* sh = nullptr;
     size_t config_count = 0;
 
     for (const BaseOBU* p : tus[i]) {
-      if (!is_config_obu(p->type())) continue;
+      if (!is_config_obu_instance(*p)) continue;
       if (p->type() == OBUType::SEQUENCE_HEADER && !sh) {
         sh = dynamic_cast<const SequenceHeaderOBU*>(p);
       }
-      auto raw = read_obu_bytes(input_ifs_, *p);
-      config_bytes.insert(config_bytes.end(), raw.begin(), raw.end());
       ++config_count;
       if (!av2c.append_config_obu(*p)) {
         MUX_ERROR("Failed to append config OBU (type {}) to av2C configOBUs",
@@ -185,7 +364,8 @@ bool Av2Muxer::setup_video_track(const OBUParser& parser) {
       return false;
     }
     const AV2SequenceHeader& sequence_header = sh->sequence_header();
-    av2c.set_from_sequence_header(sequence_header);
+    av2c.sort_in_tu_order();
+    std::vector<uint8_t> config_bytes = av2c.concatenated_config_obus();
 
     if (!config_bytes.empty() && config_bytes == last_config_bytes) {
       tu_desc_idx_[i] = active_desc_idx;
@@ -193,13 +373,22 @@ bool Av2Muxer::setup_video_track(const OBUParser& parser) {
     }
     last_config_bytes = config_bytes;
 
-    std::optional<ColrInfo> colr =
-      strategy_.colr_override ? strategy_.colr_override : extract_colr_info_from_tu(tus[i]);
+    // Per av2-isobmff #av2-sample-entry: An AV2SampleEntry SHALL contain at least one 'colr' box
+    // with the 'nclx' colour_type. Fall back to CICP 2/2/2/0 when no CICP is present.
+    std::optional<ColrInfo> extracted_colr =
+        strategy_.colr_override ? strategy_.colr_override : extract_colr_info_from_tu(tus[i]);
+    if (!extracted_colr) extracted_colr = extract_colr_info(parser);
+    ColrInfo colr = extracted_colr.value_or(ColrInfo{2, 2, 2, 0});
 
     uint32_t w_full = static_cast<uint32_t>(sequence_header.max_frame_width_minus_1) + 1;
     uint32_t h_full = static_cast<uint32_t>(sequence_header.max_frame_height_minus_1) + 1;
+    if (has_atlas_dims) {
+      w_full = max_atlas_w;
+      h_full = max_atlas_h;
+    }
     if (w_full > 0xFFFF || h_full > 0xFFFF) {
-      MUX_WARN("Frame dimensions {}x{} exceed 16-bit av2C field; truncating", w_full, h_full);
+      MUX_WARN("Frame dimensions {}x{} exceed 16-bit VisualSampleEntry field; truncating",
+               w_full, h_full);
     }
     uint16_t width = static_cast<uint16_t>(w_full & 0xFFFF);
     uint16_t height = static_cast<uint16_t>(h_full & 0xFFFF);
@@ -213,9 +402,12 @@ bool Av2Muxer::setup_video_track(const OBUParser& parser) {
           std::make_unique<DisplayOrderLifter>(sequence_header.inter_config.OrderHintBits);
       }
 
-      if (!writer_.add_video_track(strategy_.timescale, width, height, av2c)) return false;
+      if (!writer_.add_video_track_outofband(strategy_.timescale, width, height, av2c,
+                                             tkhd_width_for(width), height)) {
+        return false;
+      }
       writer_.set_samples_per_chunk(strategy_.samples_per_chunk);
-      if (colr && !writer_.add_colr_nclx(*colr)) return false;
+      if (!writer_.add_colr_nclx(colr, 1)) return false;
       new_desc_idx = 1;
     } else {
       new_desc_idx = writer_.add_sample_entry(av2c, width, height, colr);
@@ -223,18 +415,18 @@ bool Av2Muxer::setup_video_track(const OBUParser& parser) {
       MUX_INFO("CVS boundary at TU {}: new sample entry (desc_idx={})", i, new_desc_idx);
     }
 
+    if (!writer_.add_pixi(pixi, new_desc_idx)) return false;
+    if (has_pasp && !writer_.add_pasp(pasp_h, pasp_v, new_desc_idx)) return false;
+
     MUX_DEBUG("configOBUs (desc_idx={}): {} OBU(s)", new_desc_idx, config_count);
-    if (colr) {
-      MUX_DEBUG("colr/nclx ({}): cp={} tc={} mc={} full_range={}",
-                strategy_.colr_override ? "override" : "extracted from bitstream",
-                colr->colour_primaries, colr->transfer_characteristics, colr->matrix_coefficients,
-                colr->full_range_flag);
-    } else {
-      MUX_DEBUG("No CI/LCR/OPS color info found and no --colr-override; omitting colr box");
-    }
+    MUX_DEBUG("colr/nclx ({}): cp={} tc={} mc={} full_range={}",
+              strategy_.colr_override ? "override"
+                                      : (extracted_colr ? "extracted from bitstream" : "default 2/2/2/0"),
+              colr.colour_primaries, colr.transfer_characteristics, colr.matrix_coefficients,
+              colr.full_range_flag);
     last_colr_ = colr;
 
-    sample_entries_.push_back({av2c, colr, new_desc_idx, config_bytes});
+    sample_entries_.push_back({av2c, sequence_header, colr, new_desc_idx, config_bytes});
     active_desc_idx = new_desc_idx;
     tu_desc_idx_[i] = active_desc_idx;
   }
@@ -331,7 +523,8 @@ std::vector<int32_t> Av2Muxer::compute_composition_offsets(
 bool Av2Muxer::assemble_sample_bytes(const TemporalUnit& tu, std::vector<uint8_t>& out) {
   out.clear();
   const bool keep_td = !strategy_.drop_temporal_delimiters;
-  for (const auto* obu : tu.sample_obus(keep_td)) {
+  const bool strip_config = !use_inband_;
+  for (const auto* obu : tu.sample_obus(keep_td, strip_config)) {
     const auto& pos = obu->position();
     size_t total = pos.size_field_len + pos.header_len + pos.payload_size;
     size_t prev = out.size();
@@ -368,10 +561,10 @@ const SequenceHeaderOBU* Av2Muxer::find_sh_in_tu(const TemporalUnit& tu, uint32_
 }
 
 void Av2Muxer::check_cmaf_invariants(const std::vector<SampleEntryRecord>& entries) {
-  const auto& first = entries.front().av2c;
+  const auto& first = entries.front().sh;
   bool color_warned = false;
   for (size_t i = 1; i < entries.size(); ++i) {
-    const auto& e = entries[i].av2c;
+    const auto& e = entries[i].sh;
     if (e.seq_profile_idc != first.seq_profile_idc) {
       MUX_WARN("Sample entry {} has seq_profile_idc={} (first={}); players may not support "
                "switching profiles mid-stream.",

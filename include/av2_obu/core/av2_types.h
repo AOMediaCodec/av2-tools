@@ -310,11 +310,19 @@ inline bool is_key_frame_obu(OBUType type) {
   return type == OBUType::CLK || type == OBUType::OLK;
 }
 
-// Configuration OBUs carried in the AV2CodecConfigurationBox (configOBUs) of the
-// sample entry rather than in samples.
+// Configuration OBUs carried in the OutOfBandAV2CodecConfigurationBox ('av2C') of the
+// sample entry rather than in samples (for global prefix metadata OBUs, see
+// is_config_obu_instance(const BaseOBU&)).
 inline bool is_config_obu(OBUType type) {
-  return type == OBUType::SEQUENCE_HEADER || type == OBUType::LAYER_CONFIGURATION_RECORD ||
-         type == OBUType::OPERATING_POINT_SET || type == OBUType::CONTENT_INTERPRETATION;
+  return type == OBUType::MSDO || type == OBUType::LAYER_CONFIGURATION_RECORD ||
+         type == OBUType::OPERATING_POINT_SET || type == OBUType::ATLAS_SEGMENT ||
+         type == OBUType::SEQUENCE_HEADER;
+}
+
+// OBUs forbidden in both OutOfBandAV2CodecConfigurationBox ('av2C') and ISOBMFF samples.
+inline bool is_forbidden_in_isobmff(OBUType type) {
+  return type == OBUType::TEMPORAL_DELIMITER || type == OBUType::CONTENT_INTERPRETATION ||
+         type == OBUType::PADDING;
 }
 
 inline bool is_regular_obu(OBUType type) {

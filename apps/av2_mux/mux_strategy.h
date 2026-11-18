@@ -34,6 +34,7 @@ struct MuxStrategy {
   enum class TimingSource { kCli, kCiTimingInfo, kDefault };
 
   bool drop_temporal_delimiters = true;
+  bool inband_config = false;
   SampleEntryMode sample_entry_mode = SampleEntryMode::kSingle;
 
   double frame_rate = 30.0;
@@ -81,6 +82,7 @@ struct UserOptions {
   double frame_rate = 30.0;
   bool frame_rate_explicit = false;
   bool drop_temporal_delimiters = true;
+  bool inband_config = false;
   uint32_t samples_per_chunk = 30;
   uint32_t start_tu = 0;
   uint32_t num_samples = 0;
