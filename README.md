@@ -40,6 +40,21 @@ The project builds several applications that use the `libav2_obu.a`:
   - [libisomedia](https://github.com/MPEGGroup/isobmff.git)
   - Google Test
 
+## WebAssembly
+
+`-DBUILD_WASM=ON` (with `emcmake`) builds `av2-parser.{js,wasm}` from `src/wasm`, used by the browser OBU analyzer in
+`web/`. The module runs in browsers, Web Workers and Node.js. Exports: `av2_parse_to_json(data, size)` (returns a
+NUL-terminated JSON string, release it with `av2_free_json`) and `av2_get_last_error()`.
+
+The JSON has a top-level `schema_version` (currently `1`). It is incremented when a field is renamed, removed or changes
+meaning; adding fields does not change it. Consumers should check it.
+
+Smoke test in Node (no stream needed, or pass any `.obu`):
+
+```bash
+node tests/wasm/wasm_smoke.mjs build-wasm/src/wasm/av2-parser.js [stream.obu]
+```
+
 ## License
 
 See [LICENSE](LICENSE) file.

@@ -49,6 +49,9 @@ static OPS::ColorInfo parse_color_info(BitstreamReader& br) {
     ci.color_primaries = br.read_bits(8);
     ci.transfer_characteristics = br.read_bits(8);
     ci.matrix_coefficients = br.read_bits(8);
+  } else {
+    color_description_preset(ci.color_description_idc, ci.color_primaries, ci.transfer_characteristics,
+                             ci.matrix_coefficients);
   }
   ci.full_range_flag = br.read_bit();
   return ci;
@@ -238,11 +241,9 @@ json OperatingPointSetOBU::to_json() const {
       if (op.has_color_info) {
         json ci;
         ci["color_description_idc"] = op.color_info.color_description_idc;
-        if (op.color_info.color_description_idc == 0) {
-          ci["color_primaries"] = op.color_info.color_primaries;
-          ci["transfer_characteristics"] = op.color_info.transfer_characteristics;
-          ci["matrix_coefficients"] = op.color_info.matrix_coefficients;
-        }
+        ci["color_primaries"] = op.color_info.color_primaries;
+        ci["transfer_characteristics"] = op.color_info.transfer_characteristics;
+        ci["matrix_coefficients"] = op.color_info.matrix_coefficients;
         ci["full_range_flag"] = op.color_info.full_range_flag;
         op_j["color_info"] = ci;
       }

@@ -59,6 +59,9 @@ static LCROBU::ColorInfo parse_color_info(BitstreamReader& br) {
     ci.color_primaries = br.read_bits(8);
     ci.transfer_characteristics = br.read_bits(8);
     ci.matrix_coefficients = br.read_bits(8);
+  } else {
+    color_description_preset(ci.color_description_idc, ci.color_primaries, ci.transfer_characteristics,
+                             ci.matrix_coefficients);
   }
   ci.full_range_flag = br.read_bit();
   return ci;
@@ -274,11 +277,9 @@ static json xlayer_info_to_json(const LCROBU::XLayerInfo& xi) {
   if (xi.color_info_present) {
     json ci;
     ci["color_description_idc"] = xi.color_info.color_description_idc;
-    if (xi.color_info.color_description_idc == 0) {
-      ci["color_primaries"] = xi.color_info.color_primaries;
-      ci["transfer_characteristics"] = xi.color_info.transfer_characteristics;
-      ci["matrix_coefficients"] = xi.color_info.matrix_coefficients;
-    }
+    ci["color_primaries"] = xi.color_info.color_primaries;
+    ci["transfer_characteristics"] = xi.color_info.transfer_characteristics;
+    ci["matrix_coefficients"] = xi.color_info.matrix_coefficients;
     ci["full_range_flag"] = xi.color_info.full_range_flag;
     j["color_info"] = ci;
   }
