@@ -23,9 +23,13 @@ namespace {
 constexpr uint32_t kBrandAv02 = MP4_FOUR_CHAR_CODE('a', 'v', '0', '2');
 constexpr uint32_t kBrandIso6 = MP4_FOUR_CHAR_CODE('i', 's', 'o', '6');
 constexpr uint32_t kAtomTypeAv2C = MP4_FOUR_CHAR_CODE('a', 'v', '2', 'C');
-constexpr uint32_t kSampleEntryTypeAv02 = MP4_FOUR_CHAR_CODE('a', 'v', '0', '2');
+constexpr uint32_t kAtomTypeAv2c = MP4_FOUR_CHAR_CODE('a', 'v', '2', 'c');
+constexpr uint32_t kSampleEntryTypeAv2E = MP4_FOUR_CHAR_CODE('a', 'v', '2', 'E');
+constexpr uint32_t kSampleEntryTypeAv2e = MP4_FOUR_CHAR_CODE('a', 'v', '2', 'e');
 constexpr uint32_t kAtomTypeColr = MP4_FOUR_CHAR_CODE('c', 'o', 'l', 'r');
 constexpr uint32_t kColourTypeNclx = MP4_FOUR_CHAR_CODE('n', 'c', 'l', 'x');
+constexpr uint32_t kAtomTypePixi = MP4_FOUR_CHAR_CODE('p', 'i', 'x', 'i');
+constexpr uint32_t kAtomTypePasp = MP4_FOUR_CHAR_CODE('p', 'a', 's', 'p');
 
 // Allocate an MP4Handle and copy bytes into it.
 MP4Handle make_handle(const void* data, size_t size) {
@@ -61,8 +65,8 @@ Mp4Writer::~Mp4Writer() {
   if (movie_) MP4DisposeMovie(movie_);
 }
 
-bool Mp4Writer::add_video_track(uint32_t timescale, uint16_t width, uint16_t height,
-                                const AV2CodecConfigurationBox& av2c) {
+bool Mp4Writer::add_video_track_outofband(uint32_t timescale, uint16_t width, uint16_t height,
+                                          const OutOfBandAV2CodecConfigurationBox& av2c) {
   if (!movie_) return false;
 
   MP4Err err = MP4NewMovieTrack(movie_, MP4NewTrackIsVisual, &track_);
@@ -78,6 +82,69 @@ bool Mp4Writer::add_video_track(uint32_t timescale, uint16_t width, uint16_t hei
   }
 
   uint32_t desc_idx = add_sample_entry(av2c, width, height, std::nullopt);
+  return desc_idx == 1;
+}
+
+bool Mp4Writer::add_video_track_inband(uint32_t timescale, uint16_t width, uint16_t height,
+                                       const InBandAV2CodecConfigurationBox& av2c) {
+  if (!movie_) return false;
+
+  MP4Err err = MP4NewMovieTrack(movie_, MP4NewTrackIsVisual, &track_);
+  if (err != MP4NoErr || !track_) {
+    MUX_ERROR("MP4NewMovieTrack failed (err={})", err);
+    return false;
+  }
+
+  err = MP4NewTrackMedia(track_, &media_, MP4VisualHandlerType, timescale, /*dataRef=*/nullptr);
+  if (err != MP4NoErr || !media_) {
+    MUX_ERROR("MP4NewTrackMedia failed (err={})", err);
+    return false;
+  }
+
+  std::vector<uint8_t> av2c_bytes = av2c.serialize();
+  if (av2c_bytes.empty()) {
+    MUX_ERROR("av2c serialization produced empty payload");
+    return false;
+  }
+
+  MP4Handle av2c_payload = make_handle(av2c_bytes.data(), av2c_bytes.size());
+  if (!av2c_payload) {
+    MUX_ERROR("MP4NewHandle(av2c payload) failed");
+    return false;
+  }
+
+  MP4GenericAtom av2c_atom = nullptr;
+  err = MP4NewForeignAtom(&av2c_atom, kAtomTypeAv2c, av2c_payload);
+  if (err != MP4NoErr || !av2c_atom) {
+    MUX_ERROR("MP4NewForeignAtom('av2c') failed (err={})", err);
+    MP4DisposeHandle(av2c_payload);
+    return false;
+  }
+
+  MP4Handle entry = nullptr;
+  err = MP4NewHandle(0, &entry);
+  if (err != MP4NoErr || !entry) {
+    MUX_ERROR("MP4NewHandle(sample_entry) failed (err={})", err);
+    return false;
+  }
+
+  err = ISONewGeneralSampleDescription(track_, entry, /*dataRefIdx=*/1,
+                                       kSampleEntryTypeAv2e, av2c_atom);
+  if (err != MP4NoErr) {
+    MUX_ERROR("ISONewGeneralSampleDescription('av2e') failed (err={})", err);
+    MP4DisposeHandle(entry);
+    return false;
+  }
+
+  err = ISOSetSampleDescriptionDimensions(entry, width, height);
+  if (err != MP4NoErr) {
+    MUX_ERROR("ISOSetSampleDescriptionDimensions failed (err={})", err);
+    MP4DisposeHandle(entry);
+    return false;
+  }
+
+  uint32_t desc_idx = ++next_desc_idx_;
+  sample_entries_[desc_idx] = entry;
   return desc_idx == 1;
 }
 
@@ -123,13 +190,13 @@ bool Mp4Writer::attach_colr_nclx(MP4Handle entry, const ColrInfo& info) {
   return true;
 }
 
-bool Mp4Writer::add_colr_nclx(const ColrInfo& info) {
-  auto it = sample_entries_.find(1);
+bool Mp4Writer::add_colr_nclx(const ColrInfo& info, uint32_t desc_idx) {
+  auto it = sample_entries_.find(desc_idx);
   if (it == sample_entries_.end()) return false;
   return attach_colr_nclx(it->second, info);
 }
 
-uint32_t Mp4Writer::add_sample_entry(const AV2CodecConfigurationBox& av2c, uint16_t width,
+uint32_t Mp4Writer::add_sample_entry(const OutOfBandAV2CodecConfigurationBox& av2c, uint16_t width,
                                      uint16_t height, const std::optional<ColrInfo>& colr) {
   if (!track_) return 0;
 
@@ -160,7 +227,7 @@ uint32_t Mp4Writer::add_sample_entry(const AV2CodecConfigurationBox& av2c, uint1
     return 0;
   }
 
-  err = ISONewGeneralSampleDescription(track_, entry, /*dataRefIdx=*/1, kSampleEntryTypeAv02,
+  err = ISONewGeneralSampleDescription(track_, entry, /*dataRefIdx=*/1, kSampleEntryTypeAv2E,
                                        av2c_atom);
   if (err != MP4NoErr) {
     MUX_ERROR("ISONewGeneralSampleDescription failed (err={})", err);
@@ -183,6 +250,79 @@ uint32_t Mp4Writer::add_sample_entry(const AV2CodecConfigurationBox& av2c, uint1
   uint32_t desc_idx = ++next_desc_idx_;
   sample_entries_[desc_idx] = entry;
   return desc_idx;
+}
+
+bool Mp4Writer::add_pixi(const PixiBox& pixi, uint32_t desc_idx) {
+  auto it = sample_entries_.find(desc_idx);
+  if (it == sample_entries_.end() || !it->second) return false;
+
+  std::vector<uint8_t> payload = pixi.serialize_payload();
+  if (payload.empty()) {
+    MUX_ERROR("PixiBox::serialize_payload() produced empty payload");
+    return false;
+  }
+
+  MP4Handle h = make_handle(payload.data(), payload.size());
+  if (!h) {
+    MUX_ERROR("MP4NewHandle(pixi payload) failed");
+    return false;
+  }
+
+  MP4GenericAtom atom = nullptr;
+  MP4Err err = MP4NewForeignAtom(&atom, kAtomTypePixi, h);
+  if (err != MP4NoErr || !atom) {
+    MUX_ERROR("MP4NewForeignAtom('pixi') failed (err={})", err);
+    MP4DisposeHandle(h);
+    return false;
+  }
+
+  err = ISOAddAtomToSampleDescription(it->second, atom);
+  if (err != MP4NoErr) {
+    MUX_ERROR("ISOAddAtomToSampleDescription('pixi') failed (err={})", err);
+    return false;
+  }
+
+  MUX_DEBUG("Attached pixi (desc_idx={}, version={}, flags=0x{:x}, num_channels={})",
+            desc_idx, pixi.version, pixi.flags, pixi.channels.size());
+  return true;
+}
+
+bool Mp4Writer::add_pasp(uint32_t h_spacing, uint32_t v_spacing, uint32_t desc_idx) {
+  auto it = sample_entries_.find(desc_idx);
+  if (it == sample_entries_.end() || !it->second || h_spacing == 0 || v_spacing == 0) return false;
+
+  uint8_t payload[8];
+  payload[0] = static_cast<uint8_t>((h_spacing >> 24) & 0xFF);
+  payload[1] = static_cast<uint8_t>((h_spacing >> 16) & 0xFF);
+  payload[2] = static_cast<uint8_t>((h_spacing >> 8) & 0xFF);
+  payload[3] = static_cast<uint8_t>(h_spacing & 0xFF);
+  payload[4] = static_cast<uint8_t>((v_spacing >> 24) & 0xFF);
+  payload[5] = static_cast<uint8_t>((v_spacing >> 16) & 0xFF);
+  payload[6] = static_cast<uint8_t>((v_spacing >> 8) & 0xFF);
+  payload[7] = static_cast<uint8_t>(v_spacing & 0xFF);
+
+  MP4Handle h = make_handle(payload, sizeof(payload));
+  if (!h) {
+    MUX_ERROR("MP4NewHandle(pasp payload) failed");
+    return false;
+  }
+
+  MP4GenericAtom atom = nullptr;
+  MP4Err err = MP4NewForeignAtom(&atom, kAtomTypePasp, h);
+  if (err != MP4NoErr || !atom) {
+    MUX_ERROR("MP4NewForeignAtom('pasp') failed (err={})", err);
+    MP4DisposeHandle(h);
+    return false;
+  }
+
+  err = ISOAddAtomToSampleDescription(it->second, atom);
+  if (err != MP4NoErr) {
+    MUX_ERROR("ISOAddAtomToSampleDescription('pasp') failed (err={})", err);
+    return false;
+  }
+
+  MUX_DEBUG("Attached pasp ({}:{}, desc_idx={})", h_spacing, v_spacing, desc_idx);
+  return true;
 }
 
 bool Mp4Writer::add_sample(const std::vector<uint8_t>& bytes, uint32_t duration, bool is_sync,

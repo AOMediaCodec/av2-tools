@@ -34,7 +34,8 @@ class BaseOBU;
 
 // One entry per distinct av2C configuration (CVS) observed in the stream.
 struct SampleEntryRecord {
-  AV2CodecConfigurationBox av2c;
+  OutOfBandAV2CodecConfigurationBox av2c;
+  AV2SequenceHeader sh{};
   std::optional<ColrInfo> colr;
   uint32_t desc_idx = 0;  // 1-based index assigned by Mp4Writer
   std::vector<uint8_t> config_obu_bytes;  // serialized, for equality checks
@@ -73,6 +74,8 @@ private:
 
   // Maps TU index -> desc_idx, populated during setup_video_track().
   std::vector<uint32_t> tu_desc_idx_;
+
+  bool use_inband_ = false;
 
   // Lowest non-global obu_xlayer_id among frame OBUs (all layers share timing info)
   uint32_t base_xlayer_id_ = 0;

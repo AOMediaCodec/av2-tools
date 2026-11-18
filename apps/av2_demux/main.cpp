@@ -24,7 +24,8 @@ int main(int argc, char** argv) {
   std::string output;
   bool verbose = false;
 
-  app.add_option("input", input, "Input MP4 file (must contain an 'av02' video track)")->required();
+  app.add_option("input", input,
+                 "Input MP4 file (must contain an 'av2E' or 'av2e' video track)")->required();
   app.add_option("-o,--output", output, "Output AV2 elementary bitstream (.obu)")->required();
   app.add_flag("-v,--verbose", verbose, "Enable verbose/debug logging");
 
