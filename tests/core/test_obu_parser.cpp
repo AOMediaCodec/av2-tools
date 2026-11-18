@@ -17,6 +17,8 @@
 #include <vector>
 
 #include <av2_obu/core/av2_types.h>
+#include <av2_obu/core/bitstream_reader.h>
+#include <av2_obu/core/frame_header_info.h>
 #include <av2_obu/core/obu_parser.h>
 
 using namespace av2_obu;
@@ -218,6 +220,31 @@ TEST_F(AV2OBUParserTest, LcrAllOptionalFieldsAreParsedAndDumped) {
   EXPECT_EQ(loc["xlayer_info"]["color_info"]["color_description_idc"].get<int>(), 2);
   EXPECT_EQ(loc["xlayer_info"]["embedded_layers"][0]["atlas_segment_id"].get<int>(), 1);
   std::remove(fname);
+}
+
+// frame_size_with_refs needs NumTotalRefs, unknown in lightweight mode with an implicit ref map
+TEST(FrameHeaderInfoTest, TipWithImplicitRefMapAndSizeOverrideDoesNotOverread) {
+  AV2SequenceHeader sh;
+  sh.inter_config.OrderHintBits = 7;
+  sh.inter_config.NumRefFrames = 8;
+  sh.inter_config.enable_short_refresh_frame_flags = 1;
+  sh.inter_config.explicit_ref_frame_map = 0;
+  sh.monotonic_output_order_flag = 1;
+  sh.frame_width_bits_minus_1 = 9;
+  sh.frame_height_bits_minus_1 = 8;
+  sh.max_frame_width_minus_1 = 639;
+  sh.max_frame_height_minus_1 = 479;
+
+  const std::vector<uint8_t> payload = {0xF0, 0x8A, 0xEA, 0xA0};
+  BitstreamReader br(payload);
+  FrameHeaderInfo fh;
+  ASSERT_TRUE(fh.parse_lightweight(br, OBUType::REGULAR_TIP, sh));
+  EXPECT_TRUE(fh.parsed);
+  EXPECT_EQ(fh.order_hint, 4u);
+  EXPECT_EQ(fh.immediate_output_frame, 1u);
+  EXPECT_EQ(fh.refresh_frame_flags, 4u);
+  EXPECT_TRUE(fh.is_output_frame);
+  EXPECT_EQ(fh.FrameWidth, 640u);
 }
 
 int main(int argc, char** argv) {

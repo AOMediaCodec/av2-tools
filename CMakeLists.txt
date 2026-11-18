@@ -11,6 +11,12 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# The parser catches exceptions per OBU; Emscripten aborts on any throw unless enabled
+if(EMSCRIPTEN)
+  add_compile_options(-fexceptions)
+  add_link_options(-fexceptions)
+endif()
+
 # ---- Dependencies ----
 # find_package(OpenSSL REQUIRED) # for hashing
 

@@ -281,6 +281,17 @@ bool FrameHeaderInfo::parse_lightweight(BitstreamReader& br, OBUType obu_type,
     }
 
     // --- frame_size / frame_size_with_refs / frame_size_with_bridge ---
+    // An implicit ref map needs reference state to know NumTotalRefs, and with it how many
+    // found_ref bits precede the size: stop here instead of misreading the following bits.
+    if (!IsBridge && !explicitRefFrameMap && frame_size_override_flag &&
+        FrameType != SWITCH_FRAME) {
+      FrameWidth = static_cast<uint32_t>(sh.max_frame_width_minus_1) + 1;
+      FrameHeight = static_cast<uint32_t>(sh.max_frame_height_minus_1) + 1;
+      TipFrameMode = TIP_FRAME_DISABLED;
+      parsed = true;
+      is_output_frame = (immediate_output_frame != 0) || (implicit_output_frame != 0);
+      return true;
+    }
     if (IsBridge) {
       // frame_size_with_bridge: read bridge_frame_{width,height}_minus_1.
       // Spec also clamps via Min(RefFrame{Width,Height}[bridge_frame_ref_idx], ...);
