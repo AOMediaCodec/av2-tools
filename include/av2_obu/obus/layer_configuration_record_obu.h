@@ -73,6 +73,7 @@ public:
   struct EmbeddedLayerEntry {
     uint32_t mlayer_id = 0;
     uint32_t tlayer_map = 0;
+    bool atlas_present = false;
     uint32_t atlas_segment_id = 0;
     uint32_t priority_order = 0;
     uint32_t rendering_method = 0;
@@ -97,6 +98,7 @@ public:
     ColorInfo color_info;
     std::vector<EmbeddedLayerEntry> embedded_layers;
     // Atlas segment fields (when no embedded layer info, global + atlas present)
+    bool atlas_info_present = false;
     uint32_t atlas_segment_id = 0;
     uint32_t priority_order = 0;
     uint32_t rendering_method = 0;
@@ -107,6 +109,7 @@ public:
     uint32_t xlayer_id = 0;
     uint32_t data_size = 0;
     uint32_t num_dependent_xlayer_map = 0;
+    uint32_t remaining_bits = 0;
     XLayerInfo xlayer_info;
   };
 

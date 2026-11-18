@@ -79,6 +79,7 @@ static std::vector<LCROBU::EmbeddedLayerEntry> parse_embedded_layer_info(
       e.mlayer_id = j;
       e.tlayer_map = br.read_bits(MAX_NUM_TLAYERS);
       if (atlas_segment_present) {
+        e.atlas_present = true;
         e.atlas_segment_id = br.read_bits(8);
         e.priority_order = br.read_bits(8);
         e.rendering_method = br.read_bits(8);
@@ -129,6 +130,7 @@ static LCROBU::XLayerInfo parse_xlayer_info(BitstreamReader& br, bool is_global,
     xi.embedded_layers = parse_embedded_layer_info(br, atlas_id_present);
   } else {
     if (is_global && atlas_id_present) {
+      xi.atlas_info_present = true;
       xi.atlas_segment_id = br.read_bits(8);
       xi.priority_order = br.read_bits(8);
       xi.rendering_method = br.read_bits(8);
@@ -212,6 +214,9 @@ bool LayerConfigurationRecordOBU::parse_payload(std::ifstream& ifs) {
               gp.num_dependent_xlayer_map = sub_br.read_bits(xlayer_ids_[i]);
             }
             gp.xlayer_info = parse_xlayer_info(sub_br, true, lcr_global_atlas_id_present_flag_);
+            const size_t parsed_bits = sub_br.bits_read();
+            const size_t total_bits = static_cast<size_t>(gp.data_size) * 8;
+            gp.remaining_bits = static_cast<uint32_t>(total_bits > parsed_bits ? total_bits - parsed_bits : 0);
           } catch (const std::exception& e) {
             LIB_WARN("LCR: failed to parse xlayer {} payload: {}", gp.xlayer_id, e.what());
           }
@@ -289,6 +294,11 @@ static json xlayer_info_to_json(const LCROBU::XLayerInfo& xi) {
       json el;
       el["mlayer_id"] = e.mlayer_id;
       el["tlayer_map"] = e.tlayer_map;
+      if (e.atlas_present) {
+        el["atlas_segment_id"] = e.atlas_segment_id;
+        el["priority_order"] = e.priority_order;
+        el["rendering_method"] = e.rendering_method;
+      }
       el["layer_type"] = e.layer_type;
       if (e.layer_type == AUX_LAYER) {
         el["auxiliary_type"] = e.auxiliary_type;
@@ -297,6 +307,10 @@ static json xlayer_info_to_json(const LCROBU::XLayerInfo& xi) {
       if (e.view_type == VIEW_EXPLICIT) {
         el["view_id"] = e.view_id;
       }
+      if (e.mlayer_id > 0) {
+        el["dependent_layer_map"] = e.dependent_layer_map;
+      }
+      el["same_sh_max_resolution"] = e.same_sh_max_resolution;
       if (!e.same_sh_max_resolution) {
         el["max_expected_width"] = e.max_expected_width;
         el["max_expected_height"] = e.max_expected_height;
@@ -304,6 +318,11 @@ static json xlayer_info_to_json(const LCROBU::XLayerInfo& xi) {
       layers.push_back(el);
     }
     j["embedded_layers"] = layers;
+  }
+  if (xi.atlas_info_present) {
+    j["atlas_segment_id"] = xi.atlas_segment_id;
+    j["priority_order"] = xi.priority_order;
+    j["rendering_method"] = xi.rendering_method;
   }
   return j;
 }
@@ -364,6 +383,9 @@ json LayerConfigurationRecordOBU::to_json() const {
           gpj["num_dependent_xlayer_map"] = gp.num_dependent_xlayer_map;
         }
         gpj["xlayer_info"] = xlayer_info_to_json(gp.xlayer_info);
+        if (gp.remaining_bits > 0) {
+          gpj["remaining_payload_bits"] = gp.remaining_bits;
+        }
         payloads.push_back(gpj);
       }
       j["global_payloads"] = payloads;

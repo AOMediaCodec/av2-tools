@@ -142,6 +142,84 @@ TEST_F(AV2OBUParserTest, ContentInterpretationPresetInJson) {
   std::remove(fname);
 }
 
+// Global LCR (xlayers 0-2) and local LCR (xlayer 1) with every optional syntax element enabled
+TEST_F(AV2OBUParserTest, LcrAllOptionalFieldsAreParsedAndDumped) {
+  const std::vector<uint8_t> data = {
+    0x01, 0x08, 0x63, 0xC0, 0x1F, 0xA0, 0x00, 0x00, 0x01, 0xFE, 0xAB, 0xC0,
+    0x86, 0x39, 0x1A, 0x88, 0x22, 0xE8, 0x2B, 0x08, 0x26, 0xF0, 0x03, 0xC0,
+    0x80, 0x10, 0xE7, 0x68, 0xA7, 0x12, 0x2E, 0xAC, 0x40, 0x0B, 0xF0, 0x10,
+    0x20, 0x30, 0x00, 0x18, 0x30, 0x40, 0x50, 0x60, 0x10, 0x20, 0x44, 0xD8,
+    0x01, 0x40, 0x80, 0x78, 0x40, 0x10, 0x70, 0x80, 0x90, 0x00, 0x2B, 0x10,
+    0xF0, 0x01, 0xE0, 0x40, 0x08, 0x73, 0xB4, 0x53, 0x89, 0x17, 0x56, 0x60,
+    0x07, 0x08, 0x09, 0xF8, 0x18, 0xFC, 0x00, 0xF0, 0x20, 0x04, 0x39, 0xDA,
+    0x29, 0xC4, 0x8B, 0xAA, 0x02, 0x44, 0x02, 0x60, 0x01, 0x10, 0xA0, 0xB0,
+    0xC0, 0x10, 0x00, 0x40, 0x18, 0x80, 0x1A, 0xC0, 0x01, 0x73, 0x3D, 0x30,
+    0xA0, 0xF0, 0x03, 0xC0, 0x80, 0x10, 0xE7, 0x68, 0xA7, 0x12, 0x2E, 0xAA,
+    0x80, 0x01, 0xF0, 0x10, 0x20, 0x30, 0x00, 0x08, 0x80,
+  };
+  const char* fname = "test_lcr_all_fields.obu";
+  createTestFile(fname, data);
+  ASSERT_TRUE(parser->parse_file(fname));
+  const auto j = parser->to_json();
+  ASSERT_EQ(j["obus"].size(), 3u);
+
+  const auto& g = j["obus"][1];
+  EXPECT_EQ(g["lcr_global_config_record_id"].get<int>(), 5);
+  EXPECT_EQ(g["lcr_xlayer_map"].get<int>(), 7);
+  EXPECT_EQ(g["lcr_global_atlas_id"].get<int>(), 6);
+  EXPECT_EQ(g["lcr_global_reserved_zero_5bits"].get<int>(), 0);
+  EXPECT_EQ(g["aggregate_info"]["config_idc"].get<int>(), 33);
+  EXPECT_EQ(g["aggregate_info"]["aggregate_level_idx"].get<int>(), 17);
+  EXPECT_EQ(g["aggregate_info"]["max_interop"].get<int>(), 9);
+  ASSERT_EQ(g["xlayer_ptl"].size(), 3u);
+  EXPECT_EQ(g["xlayer_ptl"][2]["max_level_idx"].get<int>(), 12);
+
+  const auto& p0 = g["global_payloads"][0];
+  EXPECT_FALSE(p0.contains("num_dependent_xlayer_map"));
+  const auto& ci0 = p0["xlayer_info"]["color_info"];
+  EXPECT_EQ(ci0["color_description_idc"].get<int>(), 4);
+  EXPECT_EQ(ci0["transfer_characteristics"].get<int>(), 13);
+  const auto& rep = p0["xlayer_info"]["rep_info"];
+  EXPECT_EQ(rep["max_pic_width"].get<int>(), 1920);
+  EXPECT_EQ(rep["crop_bottom"].get<int>(), 10);
+  const auto& l = p0["xlayer_info"]["embedded_layers"];
+  ASSERT_EQ(l.size(), 3u);
+  EXPECT_EQ(l[0]["atlas_segment_id"].get<int>(), 1);
+  EXPECT_EQ(l[0]["rendering_method"].get<int>(), 3);
+  EXPECT_FALSE(l[0].contains("dependent_layer_map"));
+  EXPECT_TRUE(l[0]["same_sh_max_resolution"].get<bool>());
+  EXPECT_EQ(l[1]["mlayer_id"].get<int>(), 1);
+  EXPECT_EQ(l[1]["priority_order"].get<int>(), 5);
+  EXPECT_EQ(l[1]["auxiliary_type"].get<int>(), 2);
+  EXPECT_EQ(l[1]["view_id"].get<int>(), 77);
+  EXPECT_EQ(l[1]["dependent_layer_map"].get<int>(), 1);
+  EXPECT_EQ(l[1]["max_expected_width"].get<int>(), 640);
+  EXPECT_EQ(l[2]["mlayer_id"].get<int>(), 3);
+  EXPECT_EQ(l[2]["dependent_layer_map"].get<int>(), 5);
+
+  const auto& p1 = g["global_payloads"][1];
+  EXPECT_EQ(p1["num_dependent_xlayer_map"].get<int>(), 1);
+  EXPECT_EQ(p1["remaining_payload_bits"].get<int>(), 8);
+  EXPECT_EQ(p1["xlayer_info"]["color_info"]["color_description_idc"].get<int>(), 5);
+  EXPECT_FALSE(p1["xlayer_info"].contains("embedded_layers"));
+  EXPECT_EQ(p1["xlayer_info"]["atlas_segment_id"].get<int>(), 7);
+  EXPECT_EQ(p1["xlayer_info"]["priority_order"].get<int>(), 8);
+  EXPECT_EQ(p1["xlayer_info"]["rendering_method"].get<int>(), 9);
+
+  const auto& p2 = g["global_payloads"][2];
+  EXPECT_EQ(p2["num_dependent_xlayer_map"].get<int>(), 3);
+  EXPECT_FALSE(p2.contains("remaining_payload_bits"));
+  EXPECT_EQ(p2["xlayer_info"]["color_info"]["color_primaries"].get<int>(), 9);
+  EXPECT_EQ(p2["xlayer_info"]["embedded_layers"][0]["atlas_segment_id"].get<int>(), 10);
+
+  const auto& loc = j["obus"][2];
+  EXPECT_EQ(loc["lcr_local_atlas_id"].get<int>(), 5);
+  EXPECT_EQ(loc["local_ptl"]["seq_profile_idc"].get<int>(), 7);
+  EXPECT_EQ(loc["xlayer_info"]["color_info"]["color_description_idc"].get<int>(), 2);
+  EXPECT_EQ(loc["xlayer_info"]["embedded_layers"][0]["atlas_segment_id"].get<int>(), 1);
+  std::remove(fname);
+}
+
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
