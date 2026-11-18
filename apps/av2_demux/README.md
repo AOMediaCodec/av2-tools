@@ -20,9 +20,8 @@ cmake --build mybuild -j
 
 ## What it does
 
-1. Opens the `.mp4` and finds the first track whose sample entry is `'av02'`.
-2. Pulls the `av2C` configuration box from that sample entry and extracts its `configOBUs[]` (everything after the 9-byte prefix).
-3. Writes those configOBUs at the start of the output — they are already Annex B framed, so they go in verbatim.
-4. For every sample in decode order, writes a Temporal Delimiter (`{0x01, 0x08}`) followed by the raw sample bytes.
+1. Opens the `.mp4` and finds the first track whose sample entry is `'av2E'` or `'av2e'`.
+2. For `'av2E'`, pulls the `av2C` configuration box from that sample entry and extracts its `config_obu[]` (everything after the 2-byte header). For `'av2e'`, validates the 2-byte `av2c` configuration box (configuration OBUs are already in-band in samples).
+3. For every sample in decode order, writes a Temporal Delimiter (`{0x01, 0x08}`), injects `config_obu[]` at random access points (and the start of the stream) for `'av2E'`, and writes the sample OBUs.
 
 The result is a parseable AV2 elementary bitstream that round-trips through `av2_obu_tool`.

@@ -11,6 +11,8 @@
 
 #include <av2_obu/core/base_obu.h>
 #include <av2_obu/core/temporal_unit.h>
+#include <av2_obu/obus/metadata_group_obu.h>
+#include <av2_obu/obus/metadata_obu.h>
 
 #include <set>
 
@@ -24,6 +26,22 @@ bool is_coded_frame_obu(OBUType t) {
 }
 
 }  // namespace
+
+bool is_config_obu_instance(const BaseOBU& obu) {
+  const OBUType t = obu.type();
+  if (is_config_obu(t)) return true;
+  if (obu.header().get_xlayer_id() != GLOBAL_XLAYER_ID) return false;
+  if (t == OBUType::METADATA) {
+    if (const auto* m = dynamic_cast<const MetadataOBU*>(&obu)) {
+      return m->get_is_suffix() == 0;
+    }
+  } else if (t == OBUType::METADATA_GROUP) {
+    if (const auto* mg = dynamic_cast<const MetadataGroupOBU*>(&obu)) {
+      return mg->get_is_suffix() == 0;
+    }
+  }
+  return false;
+}
 
 bool TemporalUnit::is_sync_sample() const {
   // Per av2-isobmff this TU is a sync sample if every coded extended layer unit present is a CLK
@@ -42,13 +60,16 @@ bool TemporalUnit::is_sync_sample() const {
   return any_frame;
 }
 
-std::vector<const BaseOBU*> TemporalUnit::sample_obus(bool keep_td) const {
+std::vector<const BaseOBU*> TemporalUnit::sample_obus(bool keep_td,
+                                                      bool strip_config_obus) const {
   std::vector<const BaseOBU*> out;
   for (const auto* obu : obus_) {
     auto t = obu->type();
-    if (is_config_obu(t)) continue;         // carried in configOBUs, not samples
-    if (t == OBUType::PADDING) continue;     // forbidden in samples per av2-isobmff
+    if (t == OBUType::PADDING || t == OBUType::CONTENT_INTERPRETATION) {
+      continue;  // forbidden in samples per av2-isobmff
+    }
     if (t == OBUType::TEMPORAL_DELIMITER && !keep_td) continue;  // sample boundary == TU boundary
+    if (strip_config_obus && is_config_obu_instance(*obu)) continue;  // carried in 'av2C'
     out.push_back(obu);
   }
   return out;

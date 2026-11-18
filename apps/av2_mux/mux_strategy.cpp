@@ -48,6 +48,7 @@ MuxStrategy determine_strategy(const OBUParser::Statistics& stats,
   MuxStrategy s;
 
   s.drop_temporal_delimiters = user_opts.drop_temporal_delimiters;
+  s.inband_config = user_opts.inband_config;
   s.samples_per_chunk = user_opts.samples_per_chunk;
   s.start_tu = user_opts.start_tu;
   s.num_samples = user_opts.num_samples;

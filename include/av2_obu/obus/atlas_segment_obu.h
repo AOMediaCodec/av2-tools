@@ -73,6 +73,7 @@ public:
   uint32_t atlas_segment_id() const { return atlas_segment_id_; }
   ModeIdc mode_idc() const { return mode_idc_; }
   bool basic_stream_id_present() const { return basic_stream_id_present_ != 0; }
+  uint32_t msi_alpha_segments_present() const { return msi_alpha_segments_present_; }
   const std::vector<Segment>& segments() const { return segments_; }
 
 protected:
