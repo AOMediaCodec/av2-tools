@@ -22,7 +22,7 @@ jobs:
 
     - name: Build
       run: |
-        cmake -S . -B build
+        cmake -S . -B build -DBUILD_CONTAINER_TOOLS=ON
         cmake --build build -j
 
     - name: Run tests
