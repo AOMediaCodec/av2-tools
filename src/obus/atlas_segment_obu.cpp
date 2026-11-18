@@ -180,6 +180,44 @@ bool AtlasSegmentOBU::parse_payload(std::ifstream& ifs) {
   return true;
 }
 
+std::optional<std::pair<uint32_t, uint32_t>> AtlasSegmentOBU::canvas_dimensions() const {
+  if (!parsed_)
+    return std::nullopt;
+  switch (mode_idc_) {
+    case ModeIdc::ENHANCED_ATLAS: {
+      uint32_t w = 0;
+      uint32_t h = 0;
+      if (enhanced_.uniform_spacing_flag) {
+        w = (enhanced_.num_region_columns_minus_1 + 1) * (enhanced_.region_width_minus_1 + 1);
+        h = (enhanced_.num_region_rows_minus_1 + 1) * (enhanced_.region_height_minus_1 + 1);
+      } else {
+        for (uint32_t cw : enhanced_.column_width_minus_1)
+          w += cw + 1;
+        for (uint32_t rh : enhanced_.row_height_minus_1)
+          h += rh + 1;
+      }
+      if (w > 0 && h > 0)
+        return std::make_pair(w, h);
+      return std::nullopt;
+    }
+    case ModeIdc::BASIC_ATLAS:
+      if (basic_width_ > 0 && basic_height_ > 0) {
+        return std::make_pair(basic_width_, basic_height_);
+      }
+      return std::nullopt;
+    case ModeIdc::SINGLE_ATLAS:
+      return std::make_pair(nominal_width_minus_1_ + 1, nominal_height_minus_1_ + 1);
+    case ModeIdc::MULTISTREAM_ATLAS:
+    case ModeIdc::MULTISTREAM_ALPHA_ATLAS:
+      if (msi_width_ > 0 && msi_height_ > 0) {
+        return std::make_pair(msi_width_, msi_height_);
+      }
+      return std::nullopt;
+    default:
+      return std::nullopt;
+  }
+}
+
 json AtlasSegmentOBU::to_json() const {
   json j = BaseOBU::to_json();
   j["type_name"] = "ATLAS_SEGMENT";

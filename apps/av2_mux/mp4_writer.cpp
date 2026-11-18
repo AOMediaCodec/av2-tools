@@ -65,8 +65,21 @@ Mp4Writer::~Mp4Writer() {
   if (movie_) MP4DisposeMovie(movie_);
 }
 
+bool Mp4Writer::set_track_dimensions(uint16_t width, uint16_t height, uint32_t track_width,
+                                     uint32_t track_height) {
+  const uint32_t tkhd_width = track_width > 0 ? track_width : width;
+  const uint32_t tkhd_height = track_height > 0 ? track_height : height;
+  MP4Err err = MJ2SetTrackDimensions(track_, tkhd_width, tkhd_height);
+  if (err != MP4NoErr) {
+    MUX_ERROR("MJ2SetTrackDimensions failed (err={})", err);
+    return false;
+  }
+  return true;
+}
+
 bool Mp4Writer::add_video_track_outofband(uint32_t timescale, uint16_t width, uint16_t height,
-                                          const OutOfBandAV2CodecConfigurationBox& av2c) {
+                                          const OutOfBandAV2CodecConfigurationBox& av2c,
+                                          uint32_t track_width, uint32_t track_height) {
   if (!movie_) return false;
 
   MP4Err err = MP4NewMovieTrack(movie_, MP4NewTrackIsVisual, &track_);
@@ -74,6 +87,8 @@ bool Mp4Writer::add_video_track_outofband(uint32_t timescale, uint16_t width, ui
     MUX_ERROR("MP4NewMovieTrack failed (err={})", err);
     return false;
   }
+
+  if (!set_track_dimensions(width, height, track_width, track_height)) return false;
 
   err = MP4NewTrackMedia(track_, &media_, MP4VisualHandlerType, timescale, /*dataRef=*/nullptr);
   if (err != MP4NoErr || !media_) {
@@ -86,7 +101,8 @@ bool Mp4Writer::add_video_track_outofband(uint32_t timescale, uint16_t width, ui
 }
 
 bool Mp4Writer::add_video_track_inband(uint32_t timescale, uint16_t width, uint16_t height,
-                                       const InBandAV2CodecConfigurationBox& av2c) {
+                                       const InBandAV2CodecConfigurationBox& av2c,
+                                       uint32_t track_width, uint32_t track_height) {
   if (!movie_) return false;
 
   MP4Err err = MP4NewMovieTrack(movie_, MP4NewTrackIsVisual, &track_);
@@ -94,6 +110,8 @@ bool Mp4Writer::add_video_track_inband(uint32_t timescale, uint16_t width, uint1
     MUX_ERROR("MP4NewMovieTrack failed (err={})", err);
     return false;
   }
+
+  if (!set_track_dimensions(width, height, track_width, track_height)) return false;
 
   err = MP4NewTrackMedia(track_, &media_, MP4VisualHandlerType, timescale, /*dataRef=*/nullptr);
   if (err != MP4NoErr || !media_) {

@@ -38,12 +38,15 @@ public:
   Mp4Writer& operator=(const Mp4Writer&) = delete;
 
   // Creates the track and its first out-of-band ('av2E') sample entry (desc_idx == 1).
+  // track_width/track_height set the tkhd size; 0 falls back to width/height.
   bool add_video_track_outofband(uint32_t timescale, uint16_t width, uint16_t height,
-                                 const OutOfBandAV2CodecConfigurationBox& av2c);
+                                 const OutOfBandAV2CodecConfigurationBox& av2c,
+                                 uint32_t track_width = 0, uint32_t track_height = 0);
 
   // Creates the track and its in-band ('av2e') sample entry (desc_idx == 1).
   bool add_video_track_inband(uint32_t timescale, uint16_t width, uint16_t height,
-                              const InBandAV2CodecConfigurationBox& av2c);
+                              const InBandAV2CodecConfigurationBox& av2c,
+                              uint32_t track_width = 0, uint32_t track_height = 0);
 
   // Must be called after add_video_track_outofband()/add_video_track_inband()/add_sample_entry()
   // and before the first add_sample() for that desc_idx.
@@ -74,6 +77,9 @@ public:
   bool finalize(const std::string& output_path);
 
 private:
+  bool set_track_dimensions(uint16_t width, uint16_t height, uint32_t track_width,
+                            uint32_t track_height);
+
   MP4Movie movie_ = nullptr;
   MP4Track track_ = nullptr;
   MP4Media media_ = nullptr;
